@@ -1,0 +1,27 @@
+{
+  "name": "opencode-sondera",
+  "version": "0.1.0",
+  "description": "Sondera Cedar policy enforcement plugin for opencode",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build:adapter": "cd adapter && cargo build --release",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "keywords": ["opencode", "sondera", "cedar", "policy", "security"],
+  "license": "MIT",
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.13",
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
+  }
+}
