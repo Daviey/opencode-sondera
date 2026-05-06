@@ -133,19 +133,17 @@ describe("SonderaPlugin", () => {
   it("allows execution on escalate (logs warning)", async () => {
     mockSpawnHealthyThenRespond(0, 0, JSON.stringify({ decision: "escalate", reason: "suspicious" }))
 
-    const warnSpy = mock(() => {})
-    const origWarn = console.warn
-    console.warn = warnSpy
-
     const plugin = await makePlugin()
 
     const input = { tool: "bash", sessionId: "s1" }
     const output = { args: { command: "ls" } }
 
     await plugin["tool.execute.before"](input, output)
-    expect(warnSpy).toHaveBeenCalled()
 
-    console.warn = origWarn
+    const mod = await import("./index")
+    const m = mod.getMetrics()
+    expect(m.escalated).toBe(1)
+    expect(m.total).toBe(1)
   })
 
   it("allows execution when adapter exits non-zero (fail open)", async () => {
