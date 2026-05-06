@@ -1,3 +1,15 @@
+# cargo-audit suppression list
+#
+# Every entry here is a transitive dependency we cannot fix directly.
+# Each must have a reason with either an upstream tracking link or
+# a note that no fix exists.
+#
+# Review on every Dependabot cargo update PR. Remove entries when
+# the upstream bump lands and cargo audit --config audit.toml no
+# longer reports them.
+#
+# Last reviewed: 2026-05-06
+
 [advisories]
 ignore = [
     { id = "RUSTSEC-2026-0095", reason = "wasmtime 40.0.4 via yara-x 1.13.0. Fixed in wasmtime >=43.0.1. Upstream bump tracked: sondera-ai/sondera-coding-agent-hooks#6" },
