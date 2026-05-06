@@ -4,7 +4,7 @@
 opencode starts
     |
     v
-Plugin loaded from ~/.config/opencode/plugins/sondera.ts
+Plugin loaded (via npm, curl to plugins/ dir, or .opencode/plugins/)
     |
     v
 SonderaPlugin() called with { directory, serverUrl }
@@ -51,4 +51,4 @@ Per tool call:
   - recordAllow/deny/escalate/error metrics
 ```
 
-The adapter binary path is resolved at client construction time (see [adapter-binary-path-resolution.md](adapter-binary-path-resolution.md)). The health check runs once; the client is reused for all subsequent adjudications.
+The adapter binary path is resolved at client construction time (see [ADR-006](../adr/006-adapter-binary-path-resolution.md)). The health check runs once; the client is reused for all subsequent adjudications.

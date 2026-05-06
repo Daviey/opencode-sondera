@@ -7,7 +7,7 @@
        v
   +---------------------------------------------+
   | SonderaPlugin (TypeScript, in-process)      |
-  | ~/.config/opencode/plugins/sondera.ts       |
+  | Installed via npm, curl, or plugins/ dir    |
   |                                             |
   | tool.execute.before hook:                   |
   |   1. Guard against undefined output.args    |

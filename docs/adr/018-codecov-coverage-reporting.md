@@ -8,9 +8,9 @@ CI previously generated a `coverage-badge.json` file and committed it back to ma
 
 ## Decision
 
-Use [Codecov](https://codecov.io) for coverage reporting. The CI workflow runs `bun test --coverage --coverage-reporter=lcov` and uploads the LCOV report via `codecov/codecov-action@v5`. The `CODECOV_TOKEN` secret authenticates the upload.
+Use [Codecov](https://codecov.io) for coverage reporting. The CI workflow runs `bun test --coverage --coverage-reporter=lcov` and uploads the LCOV report via `codecov/codecov-action@v5`. Upload tokens are not required for public repos with the Codecov GitHub App installed.
 
-The README badge points to `https://codecov.io/gh/Daviey/opencode-sondera/branch/main/graph/badge.svg`.
+The README badge uses the Codecov badge endpoint with a token parameter for reliable rendering.
 
 ## Alternatives considered
 
@@ -22,6 +22,6 @@ Upload artifact only: no persistent badge or PR coverage comments.
 
 ## Consequences
 
-Codecov provides: persistent coverage badge, PR coverage diff comments, trend tracking, and file-level coverage breakdown. No git history pollution. Free for public repos.
+Codecov provides: persistent coverage badge, PR coverage diff comments, project coverage status checks, trend tracking, and file-level coverage breakdown. No git history pollution. Free for public repos.
 
-Requires `CODECOV_TOKEN` repository secret to be set. The `fail_ci_if_error: false` setting means CI passes even if Codecov is unreachable.
+The `fail_ci_if_error: false` setting means CI passes even if Codecov is unreachable.
