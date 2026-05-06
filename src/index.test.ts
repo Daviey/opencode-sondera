@@ -171,6 +171,7 @@ describe("SonderaPlugin", () => {
 
     const mod = await import("./index")
     const m = mod.getMetrics()
+    console.log(`[DEBUG] metrics: ${JSON.stringify(m)}`)
     expect(m.escalated).toBe(1)
   })
 
