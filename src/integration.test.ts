@@ -62,18 +62,9 @@ function adjudicate(request: object, timeoutMs = 15000): Promise<{ decision: str
       readAll(proc.stderr),
     ]).then(([code, stdout, stderr]) => {
       clearTimeout(timer)
-      if (stdout.trim()) {
-        try { resolve(JSON.parse(stdout.trim())) }
-        catch { reject(new Error("invalid JSON: " + stdout + " stderr: " + stderr)) }
-      } else if (code !== 0) {
-        if (stderr.includes("Ollama") || stderr.includes("Connection refused")) {
-          resolve({ decision: "allow", annotations: [] })
-        } else {
-          reject(new Error("adapter exited " + code + ": " + stderr))
-        }
-      } else {
-        reject(new Error("adapter produced no output. stderr: " + stderr))
-      }
+      if (code !== 0) return reject(new Error("adapter exited " + code + ": " + stderr))
+      try { resolve(JSON.parse(stdout.trim())) }
+      catch { reject(new Error("invalid JSON: " + stdout + " stderr: " + stderr)) }
     }).catch(err => { clearTimeout(timer); reject(err) })
   })
 }
