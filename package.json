@@ -25,6 +25,7 @@
   "keywords": ["opencode", "sondera", "cedar", "policy", "security", "ai-safety"],
   "license": "MIT",
   "publishConfig": {
+    "access": "public",
     "provenance": true
   },
   "repository": {
