@@ -78,16 +78,24 @@ jobs:
         run: |
           rustup target add ${{ matrix.target }}
           cargo build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
+      - name: Locate binary
+        run: |
+          find target -name "sondera-opencode-adapter" -type f || echo "not found in target/"
+          find adapter/target -name "sondera-opencode-adapter" -type f 2>/dev/null || echo "not found in adapter/target/"
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
           name: sondera-opencode-adapter-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/sondera-opencode-adapter
+          path: |
+            target/${{ matrix.target }}/release/sondera-opencode-adapter
+            adapter/target/${{ matrix.target }}/release/sondera-opencode-adapter
           if-no-files-found: error
       - name: Attest binary
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: target/${{ matrix.target }}/release/sondera-opencode-adapter
+          subject-path: |
+            target/${{ matrix.target }}/release/sondera-opencode-adapter
+            adapter/target/${{ matrix.target }}/release/sondera-opencode-adapter
 
   github-release:
     needs: [build-adapter]
@@ -105,8 +113,11 @@ jobs:
           mkdir -p release-assets
           for dir in artifacts/*/; do
             target=$(basename "$dir")
-            cp "${dir}sondera-opencode-adapter" "release-assets/sondera-opencode-adapter-${target}"
-            chmod +x "release-assets/sondera-opencode-adapter-${target}"
+            binary=$(find "$dir" -name "sondera-opencode-adapter" -type f | head -1)
+            if [ -n "$binary" ]; then
+              cp "$binary" "release-assets/sondera-opencode-adapter-${target}"
+              chmod +x "release-assets/sondera-opencode-adapter-${target}"
+            fi
           done
           ls -la release-assets/
       - uses: softprops/action-gh-release@v3
