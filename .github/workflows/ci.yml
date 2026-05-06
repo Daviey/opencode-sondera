@@ -68,7 +68,7 @@ jobs:
       - name: "Diagnostic - test adapter against harness"
         run: |
           rm -rf ~/.sondera && mkdir -p ~/.sondera
-          /tmp/harness/target/debug/sondera-harness-server --policy-path /tmp/harness/policies --verbose &
+          /tmp/harness/target/debug/sondera-harness-server --policy-path /tmp/harness/policies --verbose > /dev/null 2>$HOME/harness-stderr.log &
           HARNESS_PID=$!
           for i in $(seq 1 30); do
             [ -S ~/.sondera/sondera-harness.sock ] && break
@@ -82,13 +82,14 @@ jobs:
           echo '{"tool":"bash","action":"ShellCommand","trajectory_id":"diag-allow-1","agent_id":"diag","args":{"command":"ls /tmp"},"cwd":"/tmp"}' | timeout 15 "$ADAPTER_BIN" adjudicate 2>&1
           echo "=== Deny request ==="
           echo '{"tool":"bash","action":"ShellCommand","trajectory_id":"diag-deny-2","agent_id":"diag","args":{"command":"rm -rf /"},"cwd":"/tmp"}' | timeout 15 "$ADAPTER_BIN" adjudicate 2>&1
-          echo "=== Harness stderr ==="
+          echo "=== Harness stderr (last 200 lines) ==="
           kill $HARNESS_PID 2>/dev/null
           wait $HARNESS_PID 2>/dev/null
+          tail -200 $HOME/harness-stderr.log
         env:
           ADAPTER_BIN: ${{ github.workspace }}/adapter/target/debug/sondera-opencode-adapter
-          RUST_LOG: info
-          RUST_BACKTRACE: 1
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
       - name: Run integration tests
         run: bun test src/integration.test.ts --timeout 30000
         env:
