@@ -15,18 +15,18 @@
   |   1. Normalize tool name to Sondera action  |
   |   2. Extract tool-specific args             |
   |   3. Build AdapterRequest JSON              |
-  |   4. Spawn adapter binary                   |
-  |   5. Write JSON to stdin                    |
-  |   6. Read JSON from stdout                  |
-  |   7. If deny: throw Error (blocks tool)     |
-  |   8. If escalate: log warning               |
-  |   9. If allow: proceed                      |
+  |   4. Write NDJSON line to stream stdin      |
+  |   5. Read NDJSON line from stream stdout    |
+  |   6. If deny: throw PolicyDenyError         |
+  |   7. If escalate: log warning               |
+  |   8. If allow: proceed                      |
   |                                             |
   | tool.execute.after hook:                    |
   |   Same flow, but never blocks.              |
   |   Sends observation event for logging.      |
   +------------------+--------------------------+
-                     | Bun.spawn (subprocess)
+                     | persistent Bun.spawn process (stream mode)
+                     | falls back to one-shot spawns if unsupported
                      v
   +---------------------------------------------+
   | sondera-opencode-adapter (Rust binary)      |
@@ -34,12 +34,11 @@
   |                                             |
   | Subcommands:                                |
   |   health: connect, check socket             |
-  |   adjudicate: read JSON stdin,              |
-  |     connect to harness via                  |
-  |     tarpc Unix socket,                      |
-  |     write JSON stdout                       |
+  |   stream: persistent NDJSON stdin/stdout,   |
+  |     reuses harness connection across calls  |
+  |   adjudicate: one-shot JSON stdin/stdout    |
   +------------------+--------------------------+
-                     | tarpc RPC over Unix socket
+                     | tarpc RPC over Unix socket (persistent)
                      v
   +---------------------------------------------+
   | sondera-harness-server (Rust daemon)        |
@@ -124,7 +123,27 @@ $ sondera-opencode-adapter health
 
 Exit 0 means healthy, non-zero means unreachable.
 
-### Adjudication
+### Stream mode (NDJSON)
+
+```
+$ sondera-opencode-adapter stream
+```
+
+Reads newline-delimited JSON from stdin, writes newline-delimited JSON to stdout. Keeps the harness connection alive between calls. The process reads until stdin is closed.
+
+Request lines (stdin):
+```json
+{"trajectory_id":"s1","agent_id":"opencode-user","tool":"bash","action":"ShellCommand","args":{"command":"ls"},"event_type":"before"}
+```
+
+Response lines (stdout):
+```json
+{"decision":"allow","reason":null,"annotations":[]}
+```
+
+If the harness connection drops mid-stream, the adapter returns an error response and reconnects on the next request. Invalid input lines produce an `allow` response with a reason describing the parse error.
+
+### Oneshot adjudication
 
 ```
 $ echo '<json>' | sondera-opencode-adapter adjudicate

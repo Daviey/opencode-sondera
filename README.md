@@ -117,7 +117,7 @@ nix build .#sondera-opencode-adapter
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `SONDERA_ADAPTER_PATH` | `sondera-opencode-adapter` | Path to the adapter binary |
+| `SONDERA_ADAPTER_PATH` | `$HOME/.local/bin/sondera-opencode-adapter` | Path to the adapter binary |
 | `SONDERA_ENABLED` | `true` | Set to `false` to disable |
 
 ## How It Works
@@ -129,7 +129,7 @@ opencode tool call
   opencode plugin (tool.execute.before)
        |
        v
-  sondera-opencode-adapter (Rust binary, stdin/stdout)
+  sondera-opencode-adapter (Rust binary, persistent stream)
        |
        v
   sondera-harness-server (Unix socket, tarpc)
@@ -140,8 +140,13 @@ opencode tool call
 
 The plugin uses opencode's `tool.execute.before` and `tool.execute.after` hooks:
 
-- **before**: Normalizes the tool event and sends it to the harness. If the harness returns `deny`, the plugin throws an error to block execution.
+- **before**: Normalizes the tool event and sends it to the harness. If the harness returns `deny`, the plugin throws a `PolicyDenyError` to block execution.
 - **after**: Sends the observation event to the harness for logging/policy evaluation.
+
+The adapter binary supports two modes:
+
+- **stream** (default): a persistent process that reads NDJSON from stdin and writes NDJSON to stdout, reusing the harness connection across calls. The client auto-detects support and falls back to oneshot if unavailable.
+- **adjudicate**: one-shot mode for single requests or older binaries. Reads one JSON object from stdin, connects to harness, writes one JSON object to stdout.
 
 ## Tool Mapping
 
@@ -167,9 +172,19 @@ by default. Only an explicit `deny` from the harness blocks execution.
 Specifically:
 - Adapter binary not found or exits non-zero: allow
 - Adapter returns invalid JSON: allow
+- Stream process crashes: reconnect on next call
+- Old adapter binary without `stream` command: auto-fall back to oneshot
 - Harness server not reachable at startup: plugin disables itself (warns once)
 - Harness returns an error (e.g., Ollama not running): allow
 - Any unhandled exception in the plugin: allow
+
+## Error Types
+
+The plugin throws structured errors that consumers can distinguish:
+
+- `PolicyDenyError`: harness returned `deny`. Has `decision`, `reason`, and `annotations` properties.
+- `AdjudicationError`: an unexpected error during adjudication. Logged and allowed (fail-open).
+- `HarnessUnavailableError`: harness server could not be reached at startup.
 
 ## Tested
 
