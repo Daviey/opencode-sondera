@@ -73,7 +73,6 @@ jobs:
         if: matrix.use-cross
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: true
-          AEGIS_DISABLE_NEON: "1"
         run: cross build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
       - name: Build adapter (native)
         if: ${{ !matrix.use-cross }}
