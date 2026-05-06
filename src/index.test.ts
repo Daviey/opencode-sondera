@@ -6,6 +6,10 @@ const origSpawn = Bun.spawn
 beforeEach(() => {
   delete process.env.SONDERA_ENABLED
   delete process.env.SONDERA_ADAPTER_PATH
+  delete process.env.SONDERA_DRY_RUN
+  delete process.env.SONDERA_ALLOW_PATTERNS
+  delete process.env.SONDERA_AUDIT_LOG
+  delete process.env.SONDERA_STRICT
 })
 
 afterEach(() => {
@@ -171,7 +175,6 @@ describe("SonderaPlugin", () => {
 
     const mod = await import("./index")
     const m = mod.getMetrics()
-    console.log(`[DEBUG] metrics: ${JSON.stringify(m)}`)
     expect(m.escalated).toBe(1)
   })
 

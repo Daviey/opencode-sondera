@@ -16,6 +16,8 @@ describe("loadConfig", () => {
 
   afterEach(() => {
     try { rmSync(TMP_DIR, { recursive: true, force: true }) } catch {}
+    delete process.env.SONDERA_ALLOW_PATTERNS
+    delete process.env.SONDERA_AUDIT_LOG
   })
 
   it("returns defaults", () => {
