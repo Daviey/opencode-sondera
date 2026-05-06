@@ -12,8 +12,6 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -49,6 +47,7 @@ jobs:
       - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
 
   integration:
+    needs: [test, adapter-check]
     runs-on: ubuntu-latest
     env:
       HARNESS_DIR: ${{ github.workspace }}/../sondera-coding-agent-hooks
