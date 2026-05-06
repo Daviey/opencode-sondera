@@ -44,25 +44,20 @@ function mockSpawnHealthyThenRespond(healthExit: number, adjExit: number, adjStd
         exited: Promise.resolve(healthExit),
       }
     }
-    if (adjExit !== 0) {
+    if (callCount === 2) {
       return {
         stdin: { write: mock(() => {}), end: mock(() => {}) },
-        stdout: makeStdout(adjStdout),
+        stdout: makeStdout(""),
         stderr: makeStdout(""),
-        exited: Promise.resolve(adjExit),
+        exited: Promise.resolve(1),
+        exitCode: 1,
       }
     }
     return {
-      stdin: {
-        write: mock(() => {}),
-        end: mock(() => {}),
-      },
+      stdin: { write: mock(() => {}), end: mock(() => {}) },
       stdout: makeStdout(adjStdout),
       stderr: makeStdout(""),
-      exitCode: null,
-      exited: new Promise(() => {}),
-      killed: false,
-      kill: mock(() => {}),
+      exited: Promise.resolve(adjExit),
     }
   }) as any
 }
