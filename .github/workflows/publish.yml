@@ -6,7 +6,7 @@ on:
       - "v*"
 
 jobs:
-  publish:
+  publish-npm:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -20,3 +20,20 @@ jobs:
       - run: npm install -g npm@latest
       - run: npm ci || npm install
       - run: npm publish --provenance --access public
+
+  github-release:
+    needs: publish-npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate release notes
+        id: notes
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.notes.outputs.tag }}
+          generate_release_notes: true
