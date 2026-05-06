@@ -55,14 +55,9 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - name: Clone harness repo
-        run: git clone --depth 1 https://github.com/sondera-ai/sondera-coding-agent-hooks.git ../sondera-coding-agent-hooks
-      - name: Cache harness build
+        run: git clone --depth 1 https://github.com/sondera-ai/sondera-coding-agent-hooks.git $GITHUB_WORKSPACE/../sondera-coding-agent-hooks
+      - name: Cache Rust builds
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          workspaces: |
-            adapter -> target
-            ../sondera-coding-agent-hooks -> target
-            ../sondera-coding-agent-hooks/apps/opencode -> target
       - name: Build harness server
         run: cargo build --bin sondera-harness-server
         working-directory: ../sondera-coding-agent-hooks
