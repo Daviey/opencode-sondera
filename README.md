@@ -5,9 +5,28 @@
 [![gitleaks](https://img.shields.io/badge/gitleaks-secret%20scan-blue)](https://github.com/Daviey/opencode-sondera/security/secret-scanning)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-[Sondera](https://github.com/sondera-ai/sondera-coding-agent-hooks) Cedar policy enforcement for [opencode](https://opencode.ai).
+A policy enforcement plugin for [opencode](https://opencode.ai) that screens every tool call against rules you define.
 
-This plugin intercepts every tool call (shell commands, file reads/writes, web fetches, etc.) and sends it to the Sondera harness server for Cedar policy adjudication. Denials block execution; escalations log a warning.
+## Why
+
+AI coding agents can run any shell command, read any file, and fetch any URL. Most of the time that is fine. Sometimes it is not. A typo in a prompt can produce `rm -rf /` instead of `rm -rf ./build`. An agent working on a public repo might follow a link to an internal service. A compromised dependency could instruct the model to exfiltrate environment variables.
+
+opencode-sondera sits between opencode and the tools it calls. Every tool invocation (shell commands, file reads and writes, web fetches, searches) is checked against a policy before it runs. Denied calls are blocked. Suspicious calls are logged. Allowed calls proceed without intervention.
+
+Policies are written in [Cedar](https://www.cedarpolicy.com/), Amazon's open source policy language. Cedar policies are declarative, readable, and auditable. A sample policy that blocks destructive shell commands:
+
+```cedar
+permit(
+  principal,
+  action == Action::"ShellCommand",
+  resource
+)
+when { !resource.command.contains("rm -rf") };
+```
+
+The [Sondera harness server](https://github.com/sondera-ai/sondera-coding-agent-hooks) evaluates these policies. It bundles a Cedar engine with optional YARA rule scanning and LLM-based classification for commands that fall into grey areas. The harness runs as a local process; no data leaves your machine unless you configure an external classifier.
+
+This plugin is the glue between opencode and the harness. It normalises tool calls into a common format, sends them for adjudication, and enforces the decision.
 
 ## Prerequisites
 
