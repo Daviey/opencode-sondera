@@ -69,4 +69,4 @@ jobs:
         run: bun test src/integration.test.ts --timeout 30000
         env:
           SONDERA_HARNESS_REPO: /tmp/harness
-          SONDERA_ADAPTER_BIN: ${{ github.workspace }}/target/debug/sondera-opencode-adapter
+          SONDERA_ADAPTER_BIN: ${{ github.workspace }}/adapter/target/debug/sondera-opencode-adapter
