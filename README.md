@@ -1,8 +1,11 @@
 # opencode-sondera
 
 [![CI](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.github.com/Daviey/fb485004b27e7a05720052a6e36abcbc/raw/coverage.json)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/badge/codeql-SAST-blue)](https://github.com/Daviey/opencode-sondera/security/code-scanning?tool=CodeQL)
 [![gitleaks](https://img.shields.io/badge/gitleaks-secret%20scan-blue)](https://github.com/Daviey/opencode-sondera/security/secret-scanning)
+[![OSV](https://img.shields.io/badge/osv-vulnerability%20scan-blue)](https://github.com/Daviey/opencode-sondera/actions/workflows/security.yml)
+[![npm](https://img.shields.io/npm/v/opencode-sondera)](https://www.npmjs.com/package/opencode-sondera)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 A policy enforcement plugin for [opencode](https://opencode.ai) that screens every tool call against rules you define.

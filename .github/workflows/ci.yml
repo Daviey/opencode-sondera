@@ -22,11 +22,40 @@ jobs:
           echo "percent=$pct" >> "$GITHUB_OUTPUT"
       - name: Create coverage badge
         if: github.event_name == 'push'
-        continue-on-error: true
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
-          gistID: ${{ secrets.COVERAGE_GIST_ID }}
+          gistID: fb485004b27e7a05720052a6e36abcbc
           filename: coverage.json
           label: coverage
           message: ${{ steps.coverage.outputs.percent }}%
           color: brightgreen
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage/
+
+  adapter-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: adapter
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: adapter -> target
+      - run: cargo fmt --check
+      - run: cargo clippy -- -D warnings
+      - run: cargo check
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/dependency-review-action@v4
