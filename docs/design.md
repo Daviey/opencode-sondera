@@ -95,9 +95,12 @@ opencode tools are mapped to Sondera action types with tool-specific argument ex
 | `glob` | `FileSearch` | `pattern` |
 | `grep` | `ContentSearch` | `pattern`, `include` |
 | `webfetch` | `WebFetch` | `url`, `format` |
+| `websearch` | `WebSearch` | `query` (from `query` or `search_query`) |
 | `task` | `SubAgent` | (raw args) |
 | `skill` | `SkillLoad` | (raw args) |
 | `todowrite` | `TodoUpdate` | (raw args) |
+| `question` | `Question` | (raw args) |
+| `lsp` | `LspQuery` | (raw args) |
 | (any other) | `ToolCall` | (raw args passed through) |
 
 ## Cedar Policy Pipeline

@@ -160,7 +160,12 @@ The adapter binary supports two modes:
 | `glob` | `FileSearch` |
 | `grep` | `ContentSearch` |
 | `webfetch` | `WebFetch` |
+| `websearch` | `WebSearch` |
 | `task` | `SubAgent` |
+| `skill` | `SkillLoad` |
+| `todowrite` | `TodoUpdate` |
+| `question` | `Question` |
+| `lsp` | `LspQuery` |
 | (other) | `ToolCall` |
 
 ## Resilience
