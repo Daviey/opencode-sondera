@@ -81,7 +81,7 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
     if (!existsSync(POLICY_PATH)) throw new Error("policy directory not found at " + POLICY_PATH)
 
     rmSync(SONDERA_DIR, { recursive: true, force: true })
-    rmSync("/var/run/sondera", { recursive: true, force: true })
+    rmSync(SOCKET_PATH, { force: true })
     const socketDir = SOCKET_PATH.substring(0, SOCKET_PATH.lastIndexOf("/"))
     mkdirSync(socketDir, { recursive: true })
 
@@ -99,7 +99,6 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
       harnessProc = null
     }
     rmSync(SONDERA_DIR, { recursive: true, force: true })
-    rmSync("/var/run/sondera", { recursive: true, force: true })
   })
 
   test("health check returns exit 0", async () => {
