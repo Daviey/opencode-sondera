@@ -23,7 +23,7 @@
     "test": "bun test"
   },
   "keywords": ["opencode", "sondera", "cedar", "policy", "security", "ai-safety"],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
     "provenance": true

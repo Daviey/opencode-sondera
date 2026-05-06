@@ -300,4 +300,4 @@ defaults to allow.
 
 ## License
 
-MIT
+Apache-2.0
