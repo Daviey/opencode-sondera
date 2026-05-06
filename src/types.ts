@@ -34,6 +34,7 @@ export interface PluginContext {
   $: unknown
   directory: string
   worktree: string
+  serverUrl?: URL
 }
 
 export class PolicyDenyError extends Error {

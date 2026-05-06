@@ -38,6 +38,7 @@ export interface PluginContext {
   $: unknown
   directory: string
   worktree: string
+  serverUrl?: URL
 }
 
 export class PolicyDenyError extends Error {
@@ -311,6 +312,35 @@ export function logSummary() {
     `${metrics.bypassed} bypassed, ${metrics.errors} errors, ` +
     `avg ${avgMs}ms`,
   )
+}
+
+// --- src/toast.ts ---
+export interface ToastInput {
+  variant: "info" | "success" | "warning" | "error"
+  title?: string
+  message: string
+  duration?: number
+}
+
+let serverOrigin: string | null = null
+
+export function initToast(url: URL | undefined) {
+  serverOrigin = url?.origin ?? null
+}
+
+export async function sendToast(input: ToastInput): Promise<void> {
+  if (!serverOrigin) return
+  try {
+    await fetch(`${serverOrigin}/tui/show-toast`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    })
+  } catch {}
+}
+
+export function resetToast() {
+  serverOrigin = null
 }
 
 // --- src/normalize.ts ---
@@ -590,6 +620,7 @@ export function _reset() {
   config = null
   resetMetrics()
   closeAuditLog()
+  resetToast()
 }
 
 async function getClient(): Promise<HarnessClient | null> {
@@ -604,13 +635,19 @@ async function getClient(): Promise<HarnessClient | null> {
   const healthy = await c.health()
   if (!healthy) {
     if (config!.strictMode) {
-      console.error(
-        "[sondera] strict mode: harness server not available — blocking all tool calls",
-      )
+      sendToast({
+        variant: "error",
+        title: "Sondera",
+        message: "Strict mode: harness server not available — blocking all tool calls",
+        duration: 10_000,
+      })
     } else {
-      console.warn(
-        "[sondera] harness server not available — policy enforcement disabled",
-      )
+      sendToast({
+        variant: "warning",
+        title: "Sondera",
+        message: "Harness server not available — policy enforcement disabled",
+        duration: 6_000,
+      })
     }
     return null
   }
@@ -624,15 +661,25 @@ const SONDERA_AGENT_ID = `opencode-${process.env.USER || "unknown"}`
 
 export const SonderaPlugin = async ({
   directory,
+  serverUrl,
 }: PluginContext) => {
   config = loadConfig(directory)
+  initToast(serverUrl)
 
   return {
     "tool.execute.before": async (input: any, output: any) => {
-      const c = await getClient()
+      if (!output || typeof output.args !== "object" || output.args === null) return
+
+      let c: HarnessClient | null
+      try {
+        c = await getClient()
+      } catch (err) {
+        console.error("[sondera] init error, allowing:", err)
+        return
+      }
       if (!c) return
 
-      const args = toolArgs(input.tool, output.args)
+      const args = toolArgs(input.tool, output.args ?? {})
 
       if (matchesAllowPattern(input.tool, args, config!.allowPatterns)) {
         recordBypass()
@@ -643,7 +690,7 @@ export const SonderaPlugin = async ({
         input.tool,
         args,
         directory,
-        input.sessionId,
+        input.sessionID ?? input.sessionId,
         SONDERA_AGENT_ID,
         "before",
       )
@@ -656,6 +703,11 @@ export const SonderaPlugin = async ({
         console.error(new AdjudicationError(err))
         recordError()
         if (config!.strictMode) {
+          sendToast({
+            variant: "error",
+            title: "Sondera",
+            message: "Strict mode: adjudication failed, blocking by default",
+          })
           throw new Error("[sondera] strict mode: adjudication failed, blocking by default")
         }
         return
@@ -665,13 +717,24 @@ export const SonderaPlugin = async ({
       writeAudit(event, result, config!.dryRun, durationMs)
 
       if (result.decision === "deny") {
+        const reason = result.reason || "action denied by policy"
         if (config!.dryRun) {
-          const reason = result.reason || "action denied by policy"
-          console.warn(`[sondera] dry-run deny (would block): ${reason}`)
+          sendToast({
+            variant: "warning",
+            title: "Sondera (dry-run)",
+            message: `Would deny: ${reason}`,
+            duration: 8_000,
+          })
           recordDryRunDeny(durationMs)
           return
         }
         recordDeny(durationMs)
+        sendToast({
+          variant: "error",
+          title: "Sondera",
+          message: reason,
+          duration: 10_000,
+        })
         throw new PolicyDenyError(result)
       }
 
@@ -684,20 +747,30 @@ export const SonderaPlugin = async ({
         const reason = result.reason || "action requires approval"
         const policyCtx = formatPolicyContext(result)
         const msg = policyCtx ? `${reason}\n${policyCtx}` : reason
-        console.warn(`[sondera] escalation: ${msg}`)
+        sendToast({
+          variant: "warning",
+          title: "Sondera",
+          message: msg,
+          duration: 10_000,
+        })
       }
     },
 
     "tool.execute.after": async (input: any, output: any) => {
-      const c = await getClient()
+      let c: HarnessClient | null
+      try {
+        c = await getClient()
+      } catch {
+        return
+      }
       if (!c) return
 
-      const args = toolArgs(input.tool, output.args)
+      const args = toolArgs(input.tool, (input.args ?? output?.args) ?? {})
       const event = normalizeEvent(
         input.tool,
         args,
         directory,
-        input.sessionId,
+        input.sessionID ?? input.sessionId,
         SONDERA_AGENT_ID,
         "after",
       )

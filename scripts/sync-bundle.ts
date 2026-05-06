@@ -3,6 +3,7 @@ const files = [
   "src/config.ts",
   "src/audit.ts",
   "src/metrics.ts",
+  "src/toast.ts",
   "src/normalize.ts",
   "src/client.ts",
   "src/index.ts",
