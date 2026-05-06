@@ -132,3 +132,67 @@ Concurrent calls must be serialized because the NDJSON protocol is line-based an
 Process lifecycle: if the stream process crashes (harness server restarts, OOM, etc.), the client detects the dead process and spawns a new one on the next call. The exited promise handler invalidates the cached process reference. The `ensureStreamProcess` method checks `exitCode === null` before reusing.
 
 The oneshot path is preserved for tests (`forceOneshot` constructor parameter) and as a fallback for old adapter binaries. It is also used if the stream process repeatedly fails.
+
+
+## ADR-009: Dry Run Mode
+
+Rolling out policy enforcement to existing teams is risky. Blocking tool calls without warning can disrupt workflows and erode trust.
+
+`SONDERA_DRY_RUN=1` sends every tool call to the harness for adjudication but does not throw on deny. Denied actions are logged as `console.warn` and the tool call proceeds. Audit log entries include `dry_run: true` so dry-run denials can be filtered from real enforcement later.
+
+This lets teams run policies in shadow mode: they see what would be blocked without breaking anything. Once the deny rate is acceptable, flip dry run off.
+
+The implementation adds a single branch in the deny path of `tool.execute.before`. No changes to the adapter or harness are needed.
+
+
+## ADR-010: Strict Mode (Fail-Closed)
+
+The default fail-open design prioritizes availability. In some contexts, security is more important. CI pipelines, shared workstations, and production-adjacent development should block tool calls if the policy engine is unreachable.
+
+`SONDERA_STRICT=1` changes three failure modes:
+
+1. Harness unreachable at startup: instead of disabling enforcement and allowing all calls, the plugin blocks all calls (the `getClient()` returns null, and strict-mode checks in `tool.execute.before` throw on every call).
+2. Adjudication fails mid-session: instead of logging and allowing, the plugin throws, blocking the tool call.
+3. Policy deny: unchanged (always blocks).
+
+Strict mode does not affect allow patterns. Tool calls matching an allow pattern still skip adjudication entirely, even in strict mode. This is intentional: allow patterns represent trusted operations that the user has explicitly opted out of policy enforcement for.
+
+
+## ADR-011: Allow Patterns for Selective Bypass
+
+Not every tool call needs policy evaluation. Frequent read-only operations like `git status`, `ls`, and `glob` add latency without security benefit. Teams working in specific domains may have their own safe commands.
+
+`SONDERA_ALLOW_PATTERNS` accepts comma-separated regex patterns. When a tool call matches any pattern, adjudication is skipped entirely. The regex is tested against a space-joined string of the tool name and extracted args (`command`, `path`, `url`, `pattern`, `query`).
+
+Patterns come from two sources: the `SONDERA_ALLOW_PATTERNS` env var and the `allowPatterns` array in project config. Both are merged; invalid regexes are logged and skipped.
+
+This is a local trust decision, not a policy bypass. The user (or project config) decides which operations are safe to skip. The harness never sees these calls.
+
+
+## ADR-012: JSONL Audit Log
+
+For compliance and debugging, teams need a record of every adjudication. The audit log writes one JSONL line per tool call to a configurable path.
+
+Each entry includes: timestamp, trajectory ID, tool, action, decision, reason (if any), dry-run flag, and round-trip duration in milliseconds. The format is structured for downstream analysis with `jq`, spreadsheet import, or log aggregation.
+
+The log is opened once at plugin initialization using `Bun.file().writer()` and flushed after each write. If the file cannot be opened, the plugin logs an error and continues without audit logging. The log is not rotated; that is the user's responsibility.
+
+
+## ADR-013: Per-Session Metrics
+
+The plugin tracks counters (total, allowed, denied, escalated, dry-run denies, bypassed, errors) and cumulative latency across the session. A summary is logged when opencode exits.
+
+This gives teams a quick sanity check: if the deny count is zero after a long session, policies may be too permissive. If the bypass count is high, allow patterns may be too broad.
+
+Metrics are module-level state, reset between sessions via `_reset()`. The `getMetrics()` export is available for programmatic access. No persistent storage; metrics are ephemeral.
+
+
+## ADR-014: Per-Project Config File
+
+Environment variables are global. Teams working across multiple projects may want different settings per project (different allow patterns, audit log paths, or strict mode).
+
+The plugin reads `.opencode/sondera.json` or `sondera.json` from the project root directory (passed as `directory` in the plugin context). The config file supports the same options as env vars: `enabled`, `dryRun`, `allowPatterns`, `auditLogPath`, `strictMode`.
+
+Precedence: env vars override project config. This lets a CI pipeline force `SONDERA_STRICT=1` regardless of project config, while still reading the project's allow patterns.
+
+The config is loaded once at plugin initialization. Changes to the file during a session are not picked up.

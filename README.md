@@ -126,8 +126,39 @@ nix build .#sondera-opencode-adapter
 | `SONDERA_ADAPTER_PATH` | `$HOME/.local/bin/sondera-opencode-adapter` | Path to the adapter binary |
 | `SONDERA_ENABLED` | `true` | Set to `false` to disable |
 | `SONDERA_DRY_RUN` | `false` | Set to `1` or `true` to log denials without blocking |
+| `SONDERA_STRICT` | `false` | Set to `1` or `true` to fail-closed on errors and harness unavailability |
 | `SONDERA_ALLOW_PATTERNS` | (none) | Comma-separated regex patterns to bypass adjudication |
 | `SONDERA_AUDIT_LOG` | (none) | Path to JSONL file for adjudication audit trail |
+
+### Strict Mode
+
+Set `SONDERA_STRICT=1` to fail-closed instead of fail-open. When strict mode is active:
+
+- Harness server unreachable at startup: all tool calls blocked
+- Adjudication fails (adapter crash, invalid response, network error): tool call blocked
+- Policy deny: tool call blocked (same as normal mode)
+
+This trades availability for security. Use it in environments where policy enforcement is mandatory (CI pipelines, shared workstations, production-adjacent development).
+
+```bash
+SONDERA_STRICT=1 opencode
+```
+
+### Per-Project Configuration
+
+Create `.opencode/sondera.json` or `sondera.json` in your project root:
+
+```json
+{
+  "enabled": true,
+  "dryRun": false,
+  "strictMode": false,
+  "allowPatterns": ["git status", "git diff", "git log"],
+  "auditLogPath": "/tmp/sondera-audit.jsonl"
+}
+```
+
+Environment variables override project config. If `SONDERA_STRICT` is set, the project config's `strictMode` is ignored.
 
 ### Dry Run Mode
 
@@ -227,11 +258,13 @@ The adapter binary supports two modes:
 
 ## Resilience
 
-The plugin is designed to **fail open**: if the harness server is down, the adapter
+The plugin is designed to **fail open** by default: if the harness server is down, the adapter
 binary is missing, or any error occurs during adjudication, the tool call is allowed
 by default. Only an explicit `deny` from the harness blocks execution.
 
-Specifically:
+Set `SONDERA_STRICT=1` to reverse this behavior and block tool calls on any failure.
+
+Specifically (default/fail-open mode):
 - Adapter binary not found or exits non-zero: allow
 - Adapter returns invalid JSON: allow
 - Stream process crashes: reconnect on next call

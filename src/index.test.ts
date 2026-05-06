@@ -342,3 +342,107 @@ describe("SonderaPlugin (stream mode)", () => {
     }
   })
 })
+
+describe("SonderaPlugin (dry-run mode)", () => {
+  beforeEach(() => {
+    delete process.env.SONDERA_DRY_RUN
+    delete process.env.SONDERA_ALLOW_PATTERNS
+    delete process.env.SONDERA_STRICT
+  })
+
+  it("logs deny but does not block in dry-run mode", async () => {
+    process.env.SONDERA_DRY_RUN = "1"
+    mockSpawnHealthyThenRespond(0, 0, JSON.stringify({ decision: "deny", reason: "would block" }))
+
+    const warnSpy = mock(() => {})
+    const origWarn = console.warn
+    console.warn = warnSpy
+
+    const plugin = await makePlugin()
+
+    const input = { tool: "bash", sessionId: "s1" }
+    const output = { args: { command: "rm -rf /" } }
+
+    await plugin["tool.execute.before"](input, output)
+
+    expect(warnSpy).toHaveBeenCalled()
+    const call = (warnSpy.mock.calls as unknown as string[][])[0] as string[]
+    expect(call[0]).toContain("dry-run deny")
+
+    console.warn = origWarn
+  })
+})
+
+describe("SonderaPlugin (strict mode)", () => {
+  beforeEach(() => {
+    delete process.env.SONDERA_DRY_RUN
+    delete process.env.SONDERA_ALLOW_PATTERNS
+    delete process.env.SONDERA_STRICT
+  })
+
+  it("blocks on adjudication failure in strict mode", async () => {
+    process.env.SONDERA_STRICT = "1"
+    let callCount = 0
+    Bun.spawn = mock(() => {
+      callCount++
+      if (callCount === 1) {
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: makeStdout(""),
+          stderr: makeStdout(""),
+          exited: Promise.resolve(0),
+        }
+      }
+      throw new Error("ENOENT")
+    }) as any
+
+    const plugin = await makePlugin()
+
+    try {
+      await plugin["tool.execute.before"](
+        { tool: "bash", sessionId: "s1" },
+        { args: { command: "ls" } },
+      )
+      expect.unreachable("should have thrown")
+    } catch (err: any) {
+      expect(err.message).toContain("strict mode")
+    }
+  })
+})
+
+describe("SonderaPlugin (allow pattern bypass)", () => {
+  beforeEach(() => {
+    delete process.env.SONDERA_DRY_RUN
+    delete process.env.SONDERA_ALLOW_PATTERNS
+    delete process.env.SONDERA_STRICT
+  })
+
+  it("skips adjudication when tool matches allow pattern", async () => {
+    process.env.SONDERA_ALLOW_PATTERNS = "\\bgit status\\b"
+    mockSpawnHealthyThenRespond(0, 0, JSON.stringify({ decision: "deny", reason: "blocked" }))
+
+    const plugin = await makePlugin()
+
+    const input = { tool: "bash", sessionId: "s1" }
+    const output = { args: { command: "git status" } }
+
+    await plugin["tool.execute.before"](input, output)
+  })
+
+  it("still blocks non-matching commands", async () => {
+    process.env.SONDERA_ALLOW_PATTERNS = "\\bgit status\\b"
+    mockSpawnHealthyThenRespond(0, 0, JSON.stringify({ decision: "deny", reason: "blocked" }))
+
+    const plugin = await makePlugin()
+
+    try {
+      await plugin["tool.execute.before"](
+        { tool: "bash", sessionId: "s1" },
+        { args: { command: "rm -rf /" } },
+      )
+      expect.unreachable("should have thrown")
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(PolicyDenyError)
+    }
+  })
+})

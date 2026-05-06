@@ -96,7 +96,6 @@ function loadConfig(directory: string): SonderaConfig {
   }
 
   const raw = process.env.SONDERA_ALLOW_PATTERNS
-  const allowPatterns: RegExp[] = []
   if (raw) {
     for (const part of raw.split(",")) {
       const trimmed = part.trim()

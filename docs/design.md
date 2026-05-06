@@ -70,15 +70,40 @@ Plugin loaded from ~/.config/opencode/plugins/sondera.ts
 SonderaPlugin() called with { directory }
     |
     v
+loadConfig(directory):
+  - Read .opencode/sondera.json or sondera.json (if present)
+  - Env vars override project config values
+  - Compile allow patterns from both sources
+  - Return SonderaConfig
+    |
+    v
 First tool.execute.before or .after call
     |
     v
 getClient() (first call only):
-  - SONDERA_ENABLED=false? -> return null (disabled)
+  - config.enabled=false? -> return null (disabled)
   - Spawn adapter with "health" subcommand
       - exit 0 -> create HarnessClient, store singleton
-      - exit non-zero or throw -> warn, return null
+         - initAuditLog() if config.auditLogPath set
+      - exit non-zero or throw:
+         - strict mode: log error, return null (all calls will block)
+         - default: warn, return null (all calls allowed)
   - Subsequent calls return cached client
+    |
+    v
+Per tool call:
+  - matchesAllowPattern()? -> recordBypass(), skip harness
+  - Send to harness via client.adjudicate()
+  - On error:
+      - strict mode: throw (block tool call)
+      - default: log AdjudicationError, allow
+  - On deny:
+      - dry run: console.warn, allow
+      - default: throw PolicyDenyError (block tool call)
+  - On escalate: console.warn, allow
+  - On allow: proceed
+  - writeAudit() for every adjudication
+  - recordAllow/deny/escalate/error metrics
 ```
 
 ## Tool Normalization
