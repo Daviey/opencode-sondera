@@ -1,0 +1,35 @@
+# cargo-audit suppression list
+#
+# Every entry here is a transitive dependency we cannot fix directly.
+# Each must have a reason with either an upstream tracking link or
+# a note that no fix exists.
+#
+# Review on every Dependabot cargo update PR. Remove entries when
+# the upstream bump lands and cargo audit no longer reports them.
+#
+# Last reviewed: 2026-05-06
+
+[advisories]
+ignore = [
+    # wasmtime 40.0.4 via yara-x 1.13.0. Fixed in wasmtime >=43.0.1.
+    # Upstream bump tracked: sondera-ai/sondera-coding-agent-hooks#6
+    "RUSTSEC-2026-0095",
+    "RUSTSEC-2026-0096",
+    "RUSTSEC-2026-0094",
+    "RUSTSEC-2026-0093",
+    "RUSTSEC-2026-0092",
+    "RUSTSEC-2026-0091",
+    "RUSTSEC-2026-0090",
+    "RUSTSEC-2026-0089",
+    "RUSTSEC-2026-0088",
+    "RUSTSEC-2026-0087",
+    "RUSTSEC-2026-0086",
+    "RUSTSEC-2026-0085",
+    "RUSTSEC-2026-0114",
+    # rsa timing sidechannel, no fix available
+    "RUSTSEC-2023-0071",
+    # bincode unmaintained, transitive via yara-x
+    "RUSTSEC-2025-0141",
+    # paste unmaintained, transitive via yara-x
+    "RUSTSEC-2024-0436",
+]
