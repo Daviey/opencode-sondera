@@ -119,6 +119,43 @@ nix build .#sondera-opencode-adapter
 |---|---|---|
 | `SONDERA_ADAPTER_PATH` | `$HOME/.local/bin/sondera-opencode-adapter` | Path to the adapter binary |
 | `SONDERA_ENABLED` | `true` | Set to `false` to disable |
+| `SONDERA_DRY_RUN` | `false` | Set to `1` or `true` to log denials without blocking |
+| `SONDERA_ALLOW_PATTERNS` | (none) | Comma-separated regex patterns to bypass adjudication |
+| `SONDERA_AUDIT_LOG` | (none) | Path to JSONL file for adjudication audit trail |
+
+### Dry Run Mode
+
+Set `SONDERA_DRY_RUN=1` to evaluate policies without blocking tool calls. Denied actions are logged as warnings but still execute. Useful for rolling out policies gradually and measuring impact before enforcement.
+
+```bash
+SONDERA_DRY_RUN=1 opencode
+```
+
+### Allow Patterns
+
+`SONDERA_ALLOW_PATTERNS` is a comma-separated list of regex patterns. When a tool call matches any pattern, it skips adjudication entirely (no harness round-trip). The regex is tested against a combined string of `tool command path url pattern query`.
+
+```bash
+# Skip adjudication for git status, ls, and echo
+SONDERA_ALLOW_PATTERNS="git status,ls -la,echo" opencode
+
+# Skip all glob and read operations
+SONDERA_ALLOW_PATTERNS="\\bglob\\b,\\bread\\b" opencode
+```
+
+### Audit Log
+
+Set `SONDERA_AUDIT_LOG` to a file path to record every adjudication as a JSONL entry:
+
+```bash
+SONDERA_AUDIT_LOG=/tmp/sondera-audit.jsonl opencode
+```
+
+Each line is a JSON object with `ts`, `trajectory_id`, `tool`, `action`, `decision`, `reason`, `dry_run`, and `duration_ms`.
+
+### Session Stats
+
+The plugin logs a summary of adjudication stats when opencode exits (via `console.log`), including total calls, allow/deny/escalate counts, bypasses, errors, and average latency.
 
 ## How It Works
 

@@ -42,6 +42,52 @@ class AdjudicationError extends Error {
   }
 }
 
+interface SonderaConfig {
+  enabled: boolean
+  dryRun: boolean
+  allowPatterns: RegExp[]
+  auditLogPath: string | null
+}
+
+function loadConfig(): SonderaConfig {
+  const enabled = process.env.SONDERA_ENABLED !== "false"
+  const dryRun = process.env.SONDERA_DRY_RUN === "1" || process.env.SONDERA_DRY_RUN === "true"
+  const auditLogPath = process.env.SONDERA_AUDIT_LOG || null
+
+  const raw = process.env.SONDERA_ALLOW_PATTERNS
+  const allowPatterns: RegExp[] = []
+  if (raw) {
+    for (const part of raw.split(",")) {
+      const trimmed = part.trim()
+      if (trimmed.length === 0) continue
+      try { allowPatterns.push(new RegExp(trimmed)) }
+      catch { console.error(`[sondera] invalid allow pattern: ${trimmed}`) }
+    }
+  }
+
+  return { enabled, dryRun, allowPatterns, auditLogPath }
+}
+
+function matchesAllowPattern(
+  tool: string,
+  args: Record<string, unknown>,
+  patterns: RegExp[],
+): boolean {
+  if (patterns.length === 0) return false
+
+  const targets = [tool]
+  if (typeof args.command === "string") targets.push(args.command)
+  if (typeof args.path === "string" || typeof args.filePath === "string") {
+    targets.push((args.path as string) || (args.filePath as string) || "")
+  }
+  if (typeof args.url === "string") targets.push(args.url)
+  if (typeof args.pattern === "string") targets.push(args.pattern)
+  if (typeof args.query === "string") targets.push(args.query)
+
+  const haystack = targets.join(" ")
+  return patterns.some((p) => p.test(haystack))
+}
+
 const TOOL_ACTION_MAP: Record<string, string> = {
   bash: "ShellCommand",
   read: "FileRead",
@@ -304,14 +350,95 @@ class HarnessClient {
   }
 }
 
+interface AuditEntry {
+  ts: string
+  trajectory_id: string
+  tool: string
+  action: string
+  decision: string
+  reason?: string
+  dry_run: boolean
+  duration_ms: number
+}
+
+let logWriter: any = null
+
+function initAuditLog(config: SonderaConfig) {
+  if (!config.auditLogPath) return
+  try {
+    const f = Bun.file(config.auditLogPath)
+    logWriter = f.writer()
+  } catch (err) {
+    console.error(`[sondera] failed to open audit log: ${config.auditLogPath}`, err)
+  }
+}
+
+function writeAudit(
+  event: AdapterRequest,
+  result: AdjudicationResponse,
+  dryRun: boolean,
+  durationMs: number,
+) {
+  if (!logWriter) return
+  const entry: AuditEntry = {
+    ts: new Date().toISOString(),
+    trajectory_id: event.trajectory_id,
+    tool: event.tool,
+    action: event.action,
+    decision: result.decision,
+    reason: result.reason,
+    dry_run: dryRun,
+    duration_ms: Math.round(durationMs * 100) / 100,
+  }
+  try {
+    logWriter.write(JSON.stringify(entry) + "\n")
+    logWriter.flush()
+  } catch {}
+}
+
+interface Metrics {
+  total: number
+  allowed: number
+  denied: number
+  escalated: number
+  dryRunDenies: number
+  bypassed: number
+  errors: number
+  totalDurationMs: number
+}
+
+let metrics: Metrics = {
+  total: 0, allowed: 0, denied: 0, escalated: 0,
+  dryRunDenies: 0, bypassed: 0, errors: 0, totalDurationMs: 0,
+}
+
+function recordAllow(d: number) { metrics.total++; metrics.allowed++; metrics.totalDurationMs += d }
+function recordDeny(d: number) { metrics.total++; metrics.denied++; metrics.totalDurationMs += d }
+function recordEscalate(d: number) { metrics.total++; metrics.escalated++; metrics.totalDurationMs += d }
+function recordDryRunDeny(d: number) { metrics.total++; metrics.dryRunDenies++; metrics.totalDurationMs += d }
+function recordBypass() { metrics.total++; metrics.bypassed++ }
+function recordError() { metrics.total++; metrics.errors++ }
+
+function logSummary() {
+  if (metrics.total === 0) return
+  const avg = Math.round((metrics.totalDurationMs / metrics.total) * 100) / 100
+  console.log(
+    `[sondera] session stats: ${metrics.total} calls, ` +
+    `${metrics.allowed} allowed, ${metrics.denied} denied, ` +
+    `${metrics.escalated} escalated, ${metrics.dryRunDenies} dry-run denies, ` +
+    `${metrics.bypassed} bypassed, ${metrics.errors} errors, avg ${avg}ms`,
+  )
+}
+
 let client: HarnessClient | null = null
 let initialized = false
+let config: SonderaConfig | null = null
 
 async function getClient(): Promise<HarnessClient | null> {
   if (initialized) return client
   initialized = true
 
-  if (process.env.SONDERA_ENABLED === "false") {
+  if (!config!.enabled) {
     return null
   }
 
@@ -324,6 +451,7 @@ async function getClient(): Promise<HarnessClient | null> {
     return null
   }
 
+  initAuditLog(config!)
   client = c
   return client
 }
@@ -370,12 +498,20 @@ export const SonderaPlugin = async ({
   directory: string
   worktree: string
 }) => {
+  config = loadConfig()
+
   return {
     "tool.execute.before": async (input: any, output: any) => {
       const c = await getClient()
       if (!c) return
 
       const args = toolArgs(input.tool, output.args)
+
+      if (matchesAllowPattern(input.tool, args, config!.allowPatterns)) {
+        recordBypass()
+        return
+      }
+
       const event = normalizeEvent(
         input.tool,
         args,
@@ -385,19 +521,36 @@ export const SonderaPlugin = async ({
         "before",
       )
 
+      const start = performance.now()
       let result
       try {
         result = await c.adjudicate(event)
       } catch (err) {
         console.error(new AdjudicationError(err))
+        recordError()
         return
       }
+      const durationMs = performance.now() - start
+
+      writeAudit(event, result, config!.dryRun, durationMs)
 
       if (result.decision === "deny") {
+        if (config!.dryRun) {
+          const reason = result.reason || "action denied by policy"
+          console.warn(`[sondera] dry-run deny (would block): ${reason}`)
+          recordDryRunDeny(durationMs)
+          return
+        }
+        recordDeny(durationMs)
         throw new PolicyDenyError(result)
       }
 
+      if (result.decision === "allow") {
+        recordAllow(durationMs)
+      }
+
       if (result.decision === "escalate") {
+        recordEscalate(durationMs)
         const reason = result.reason || "action requires approval"
         const policyCtx = formatPolicyContext(result)
         const msg = policyCtx ? `${reason}\n${policyCtx}` : reason

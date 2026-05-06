@@ -178,3 +178,23 @@ Response (stdout):
 ```
 
 `decision` is one of: `allow`, `deny`, `escalate`.
+
+## Dry Run Mode
+
+When `SONDERA_DRY_RUN=1` is set, the plugin sends all tool calls to the harness for adjudication but does not throw on deny. Instead, it logs what would have been blocked. This lets teams evaluate policy impact before enforcement.
+
+The deny path is replaced by a `console.warn` and the tool call proceeds. Audit log entries record `dry_run: true` so dry-run denials can be distinguished from real enforcement later.
+
+## Allow Patterns
+
+`SONDERA_ALLOW_PATTERNS` accepts comma-separated regex patterns. Matched tool calls skip the harness entirely, saving the round-trip. The regex is tested against a space-joined string of the tool name and extracted args (`command`, `path`, `url`, `pattern`, `query`).
+
+Common patterns: `"git status"` to skip harmless reads, `"\\bglob\\b"` to skip all file searches, or `"https://docs\\.example\\.com"` to allow specific domains.
+
+## Audit Log
+
+`SONDERA_AUDIT_LOG` writes one JSONL line per adjudication to the given path. Each entry includes a timestamp, the tool/action, the decision, whether it was a dry run, and the round-trip duration in milliseconds.
+
+## Metrics
+
+The plugin tracks per-session counters (total, allowed, denied, escalated, dry-run denies, bypassed, errors) and cumulative latency. A summary is logged when the session ends.
