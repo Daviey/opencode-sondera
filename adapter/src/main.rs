@@ -1,8 +1,8 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sondera_harness::{
-    Action, Agent, Annotation, Decision, Event, FileOperation, FileOpType, Harness,
-    HarnessClient, ShellCommand, ToolCall, TrajectoryEvent, WebFetch,
+    Action, Agent, Annotation, Decision, Event, FileOpType, FileOperation, Harness, HarnessClient,
+    ShellCommand, ToolCall, TrajectoryEvent, WebFetch,
 };
 use std::io::{self, Read, Write};
 use tokio::io::AsyncBufReadExt;
@@ -133,10 +133,7 @@ fn build_action(req: &AdapterRequest) -> Action {
     }
 }
 
-async fn do_adjudicate(
-    client: &HarnessClient,
-    req: AdapterRequest,
-) -> Result<AdapterResponse> {
+async fn do_adjudicate(client: &HarnessClient, req: AdapterRequest) -> Result<AdapterResponse> {
     let agent = Agent {
         id: req.agent_id.clone(),
         provider_id: "opencode".to_string(),

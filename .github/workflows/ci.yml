@@ -24,6 +24,7 @@ jobs:
         if: github.event_name == 'push'
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
+          auth: ${{ secrets.COVERAGE_GIST_TOKEN }}
           gistID: fb485004b27e7a05720052a6e36abcbc
           filename: coverage.json
           label: coverage
