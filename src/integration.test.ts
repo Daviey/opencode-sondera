@@ -3,8 +3,10 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs"
 import { join } from "path"
 
 const HARNESS_REPO = process.env.SONDERA_HARNESS_REPO || join(import.meta.dir, "../../sondera-coding-agent-hooks")
+const PLUGIN_ROOT = join(import.meta.dir, "..")
 function findAdapter(): string {
   const candidates = [
+    join(PLUGIN_ROOT, "adapter/target/debug/sondera-opencode-adapter"),
     join(HARNESS_REPO, "target/debug/sondera-opencode-adapter"),
     join(HARNESS_REPO, "apps/opencode/target/debug/sondera-opencode-adapter"),
   ]
