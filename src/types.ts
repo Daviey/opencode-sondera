@@ -35,3 +35,35 @@ export interface PluginContext {
   directory: string
   worktree: string
 }
+
+export class PolicyDenyError extends Error {
+  readonly decision: "deny"
+  readonly reason: string
+  readonly annotations?: AdjudicationResponse["annotations"]
+
+  constructor(response: AdjudicationResponse) {
+    const reason = response.reason || "action denied by policy"
+    super(`[sondera] ${reason}`)
+    this.name = "PolicyDenyError"
+    this.decision = "deny"
+    this.reason = reason
+    this.annotations = response.annotations
+  }
+}
+
+export class HarnessUnavailableError extends Error {
+  constructor(message: string) {
+    super(`[sondera] ${message}`)
+    this.name = "HarnessUnavailableError"
+  }
+}
+
+export class AdjudicationError extends Error {
+  readonly cause: unknown
+
+  constructor(cause: unknown) {
+    super(`[sondera] adjudication failed, allowing by default`)
+    this.name = "AdjudicationError"
+    this.cause = cause
+  }
+}

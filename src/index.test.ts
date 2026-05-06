@@ -1,4 +1,5 @@
 import { describe, expect, it, mock, beforeEach, afterEach } from "bun:test"
+import { PolicyDenyError } from "./types"
 
 const origSpawn = Bun.spawn
 
@@ -73,10 +74,17 @@ describe("SonderaPlugin", () => {
     const input = { tool: "bash", sessionId: "s1" }
     const output = { args: { command: "rm -rf /" } }
 
-    expect(plugin["tool.execute.before"](input, output)).rejects.toThrow("[sondera] forbidden")
+    try {
+      await plugin["tool.execute.before"](input, output)
+      expect.unreachable("should have thrown")
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(PolicyDenyError)
+      expect(err.reason).toBe("forbidden")
+      expect(err.decision).toBe("deny")
+    }
   })
 
-  it("blocks execution with policy context in deny", async () => {
+  it("blocks execution with policy annotations on deny", async () => {
     const response = {
       decision: "deny",
       reason: "policy violation",
@@ -95,8 +103,10 @@ describe("SonderaPlugin", () => {
       await plugin["tool.execute.before"](input, output)
       expect.unreachable("should have thrown")
     } catch (err: any) {
-      expect(err.message).toContain("policy violation")
-      expect(err.message).toContain("[Policy: P001]")
+      expect(err).toBeInstanceOf(PolicyDenyError)
+      expect(err.reason).toBe("policy violation")
+      expect(err.annotations).toHaveLength(1)
+      expect(err.annotations![0].policy_id).toBe("P001")
     }
   })
 

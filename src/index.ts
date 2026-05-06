@@ -1,6 +1,7 @@
 import type { PluginContext } from "./types"
 import { HarnessClient } from "./client"
 import { normalizeEvent, toolArgs } from "./normalize"
+import { PolicyDenyError, AdjudicationError } from "./types"
 
 let client: HarnessClient | null = null
 let initialized = false
@@ -26,7 +27,6 @@ async function getClient(): Promise<HarnessClient | null> {
     )
     return null
   }
-
   client = c
   return client
 }
@@ -55,20 +55,19 @@ export const SonderaPlugin = async ({
       try {
         result = await c.adjudicate(event)
       } catch (err) {
-        console.error(`[sondera] adjudication failed, allowing by default:`, err)
+        console.error(new AdjudicationError(err))
         return
       }
 
       if (result.decision === "deny") {
-        const reason = result.reason || "action denied by policy"
-        const policyCtx = formatPolicyContext(result)
-        const msg = policyCtx ? `${reason}\n\n${policyCtx}` : reason
-        throw new Error(`[sondera] ${msg}`)
+        throw new PolicyDenyError(result)
       }
 
       if (result.decision === "escalate") {
         const reason = result.reason || "action requires approval"
-        console.warn(`[sondera] escalation: ${reason}`)
+        const policyCtx = formatPolicyContext(result)
+        const msg = policyCtx ? `${reason}\n${policyCtx}` : reason
+        console.warn(`[sondera] escalation: ${msg}`)
       }
     },
 
@@ -89,7 +88,7 @@ export const SonderaPlugin = async ({
       try {
         await c.adjudicate(event)
       } catch (err) {
-        console.error(`[sondera] after-hook adjudication failed:`, err)
+        console.error(new AdjudicationError(err))
       }
     },
   }
@@ -128,3 +127,4 @@ function formatPolicyContext(result: {
 
 export { HarnessClient } from "./client"
 export { normalizeEvent, toolArgs } from "./normalize"
+export { PolicyDenyError, HarnessUnavailableError, AdjudicationError } from "./types"

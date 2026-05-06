@@ -5,6 +5,7 @@ use sondera_harness::{
     HarnessClient, ShellCommand, ToolCall, TrajectoryEvent, WebFetch,
 };
 use std::io::{self, Read, Write};
+use tokio::io::AsyncBufReadExt;
 
 #[derive(Deserialize)]
 struct AdapterRequest {
@@ -132,8 +133,10 @@ fn build_action(req: &AdapterRequest) -> Action {
     }
 }
 
-async fn adjudicate(req: AdapterRequest) -> Result<AdapterResponse> {
-    let client = HarnessClient::connect_default().await?;
+async fn do_adjudicate(
+    client: &HarnessClient,
+    req: AdapterRequest,
+) -> Result<AdapterResponse> {
     let agent = Agent {
         id: req.agent_id.clone(),
         provider_id: "opencode".to_string(),
@@ -151,8 +154,78 @@ async fn adjudicate(req: AdapterRequest) -> Result<AdapterResponse> {
             Decision::Escalate => "escalate".to_string(),
         },
         reason: result.reason,
-        annotations: result.annotations.iter().map(AdapterAnnotation::from).collect(),
+        annotations: result
+            .annotations
+            .iter()
+            .map(AdapterAnnotation::from)
+            .collect(),
     })
+}
+
+async fn adjudicate(req: AdapterRequest) -> Result<AdapterResponse> {
+    let client = HarnessClient::connect_default().await?;
+    do_adjudicate(&client, req).await
+}
+
+async fn stream_mode() -> Result<()> {
+    let stdin = tokio::io::BufReader::new(tokio::io::stdin());
+    let mut lines = stdin.lines();
+    let mut harness_client: Option<HarnessClient> = None;
+    let mut stdout = io::BufWriter::new(io::stdout());
+
+    while let Some(line) = lines.next_line().await? {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let req: AdapterRequest = match serde_json::from_str(trimmed) {
+            Ok(r) => r,
+            Err(e) => {
+                let resp = AdapterResponse {
+                    decision: "allow".to_string(),
+                    reason: Some(format!("invalid request: {}", e)),
+                    annotations: vec![],
+                };
+                writeln!(stdout, "{}", serde_json::to_string(&resp)?)?;
+                stdout.flush()?;
+                continue;
+            }
+        };
+
+        if harness_client.is_none() {
+            match HarnessClient::connect_default().await {
+                Ok(c) => harness_client = Some(c),
+                Err(e) => {
+                    let resp = AdapterResponse {
+                        decision: "allow".to_string(),
+                        reason: Some(format!("harness unreachable: {}", e)),
+                        annotations: vec![],
+                    };
+                    writeln!(stdout, "{}", serde_json::to_string(&resp)?)?;
+                    stdout.flush()?;
+                    continue;
+                }
+            }
+        }
+
+        let response = match do_adjudicate(harness_client.as_ref().unwrap(), req).await {
+            Ok(r) => r,
+            Err(e) => {
+                harness_client = None;
+                AdapterResponse {
+                    decision: "allow".to_string(),
+                    reason: Some(format!("adjudication error: {}", e)),
+                    annotations: vec![],
+                }
+            }
+        };
+
+        writeln!(stdout, "{}", serde_json::to_string(&response)?)?;
+        stdout.flush()?;
+    }
+
+    Ok(())
 }
 
 async fn health_check() -> Result<()> {
@@ -175,9 +248,10 @@ fn print_usage() {
          Commands:\n\
          \n\
          health       Check if the harness server is reachable\n\
-         adjudicate   Read JSON event from stdin, send to harness, print result to stdout\n\
+         adjudicate   Read one JSON event from stdin, return adjudication on stdout\n\
+         stream       Read NDJSON events from stdin, return NDJSON adjudications\n\
          \n\
-         Run 'adjudicate' with no arguments to read from stdin.\n\
+         'stream' keeps a persistent connection to the harness server.\n\
          With no command, defaults to 'adjudicate'.\n\
          \n\
          Socket: $SONDERA_SOCKET or ~/.sondera/sondera-harness.sock\n\
@@ -197,6 +271,9 @@ async fn main() -> Result<()> {
     match args.get(1).map(|s| s.as_str()) {
         Some("health") => {
             health_check().await?;
+        }
+        Some("stream") => {
+            stream_mode().await?;
         }
         Some("adjudicate") | None => {
             let mut input = String::new();

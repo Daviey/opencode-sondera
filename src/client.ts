@@ -1,9 +1,45 @@
 import type { AdapterRequest, AdjudicationResponse } from "./types"
 
+class LineReader {
+  private reader: ReadableStreamDefaultReader<Uint8Array>
+  private decoder = new TextDecoder()
+  private buffer = ""
+
+  constructor(stream: ReadableStream<Uint8Array>) {
+    this.reader = stream.getReader()
+  }
+
+  async readLine(): Promise<string | null> {
+    while (!this.buffer.includes("\n")) {
+      const { done, value } = await this.reader.read()
+      if (done) {
+        const remaining = this.buffer.trim()
+        this.buffer = ""
+        return remaining.length > 0 ? remaining : null
+      }
+      this.buffer += this.decoder.decode(value, { stream: true })
+    }
+    const idx = this.buffer.indexOf("\n")
+    const line = this.buffer.slice(0, idx)
+    this.buffer = this.buffer.slice(idx + 1)
+    return line
+  }
+
+  cancel() {
+    this.reader.cancel().catch(() => {})
+  }
+}
+
 export class HarnessClient {
   private binaryPath: string
+  private proc: ReturnType<typeof Bun.spawn> | null = null
+  private lineReader: LineReader | null = null
+  private useStream: boolean | null = null
+  private chain: Promise<void> = Promise.resolve()
+  private forceOneshot: boolean
 
-  constructor(binaryPath?: string) {
+  constructor(binaryPath?: string, forceOneshot = false) {
+    this.forceOneshot = forceOneshot
     const envPath = process.env.SONDERA_ADAPTER_PATH
     if (envPath) {
       this.binaryPath = envPath
@@ -15,9 +51,84 @@ export class HarnessClient {
     }
   }
 
-  async adjudicate(
-    event: AdapterRequest,
-  ): Promise<AdjudicationResponse> {
+  async adjudicate(event: AdapterRequest): Promise<AdjudicationResponse> {
+    const token = this.chain
+    let release: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    this.chain = gate
+
+    await token
+    try {
+      return await this._adjudicate(event)
+    } finally {
+      release!()
+    }
+  }
+
+  private async _adjudicate(event: AdapterRequest): Promise<AdjudicationResponse> {
+    if (this.useStream === false || this.forceOneshot) {
+      return this.oneshotAdjudicate(event)
+    }
+
+    try {
+      await this.ensureStreamProcess()
+      const stdin = this.proc!.stdin as unknown as { write: (d: string) => void }
+      stdin.write(JSON.stringify(event) + "\n")
+      const line = await this.lineReader!.readLine()
+      if (line === null) throw new Error("stream closed")
+      const result = JSON.parse(line) as AdjudicationResponse
+      this.useStream = true
+      return result
+    } catch (err) {
+      this.killStream()
+      if (this.useStream === null) {
+        this.useStream = false
+        return this.oneshotAdjudicate(event)
+      }
+      console.error(`[sondera] stream error, allowing:`, err)
+      return { decision: "allow" }
+    }
+  }
+
+  private async ensureStreamProcess() {
+    if (this.proc && (this.proc as any).exitCode === null) return
+
+    this.proc = Bun.spawn({
+      cmd: [this.binaryPath, "stream"],
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    this.lineReader = new LineReader(this.proc.stdout as ReadableStream<Uint8Array>)
+
+    const capturedProc = this.proc
+    capturedProc.exited.then((code) => {
+      if (this.proc === capturedProc) {
+        if (code !== 0 && this.useStream !== false) {
+          console.error(`[sondera] stream process exited with code ${code}`)
+        }
+        this.proc = null
+        this.lineReader = null
+      }
+    })
+  }
+
+  private killStream() {
+    if (this.proc) {
+      try {
+        if (!(this.proc as any).killed) (this.proc as any).kill()
+      } catch {}
+    }
+    if (this.lineReader) {
+      this.lineReader.cancel()
+    }
+    this.proc = null
+    this.lineReader = null
+  }
+
+  private async oneshotAdjudicate(event: AdapterRequest): Promise<AdjudicationResponse> {
     const proc = Bun.spawn({
       cmd: [this.binaryPath, "adjudicate"],
       stdin: "pipe",
@@ -32,9 +143,7 @@ export class HarnessClient {
 
     if (exitCode !== 0) {
       const stderr = await new Response(proc.stderr).text()
-      console.error(
-        `[sondera] adapter error (exit ${exitCode}): ${stderr.trim()}`,
-      )
+      console.error(`[sondera] adapter error (exit ${exitCode}): ${stderr.trim()}`)
       return { decision: "allow" }
     }
 

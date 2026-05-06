@@ -18,6 +18,30 @@ interface AdjudicationResponse {
   }>
 }
 
+class PolicyDenyError extends Error {
+  readonly decision: "deny" = "deny"
+  readonly reason: string
+  readonly annotations?: AdjudicationResponse["annotations"]
+
+  constructor(response: AdjudicationResponse) {
+    const reason = response.reason || "action denied by policy"
+    super(`[sondera] ${reason}`)
+    this.name = "PolicyDenyError"
+    this.reason = reason
+    this.annotations = response.annotations
+  }
+}
+
+class AdjudicationError extends Error {
+  readonly cause: unknown
+
+  constructor(cause: unknown) {
+    super(`[sondera] adjudication failed, allowing by default`)
+    this.name = "AdjudicationError"
+    this.cause = cause
+  }
+}
+
 const TOOL_ACTION_MAP: Record<string, string> = {
   bash: "ShellCommand",
   read: "FileRead",
@@ -54,6 +78,11 @@ function normalizeEvent(
   }
 }
 
+function str(val: unknown): string | undefined {
+  if (typeof val === "string" && val.length > 0) return val
+  return undefined
+}
+
 function toolArgs(
   tool: string,
   args: Record<string, unknown>,
@@ -62,48 +91,82 @@ function toolArgs(
     case "bash":
       return {
         command: (args.command as string) || "",
-        workdir: args.workdir || undefined,
+        workdir: str(args.workdir),
       }
     case "read":
       return {
-        path: args.filePath || args.path || "",
+        path: str(args.filePath) || str(args.path) || "",
       }
     case "edit":
       return {
-        path: args.filePath || args.path || "",
-        old_content: args.oldString || undefined,
-        new_content: args.newString || undefined,
+        path: str(args.filePath) || str(args.path) || "",
+        old_content: str(args.oldString),
+        new_content: str(args.newString),
       }
     case "write":
       return {
-        path: args.filePath || args.path || "",
-        content: args.content || undefined,
+        path: str(args.filePath) || str(args.path) || "",
+        content: str(args.content),
       }
     case "apply_patch":
       return {
-        patch_text: args.patchText || "",
+        patch_text: (args.patchText as string) || "",
       }
     case "webfetch":
       return {
-        url: args.url || "",
-        format: args.format || undefined,
+        url: (args.url as string) || "",
+        format: str(args.format),
       }
     case "glob":
       return {
-        pattern: args.pattern || "",
+        pattern: (args.pattern as string) || "",
       }
     case "grep":
       return {
-        pattern: args.pattern || "",
-        include: args.include || undefined,
+        pattern: (args.pattern as string) || "",
+        include: str(args.include),
       }
     default:
       return args
   }
 }
 
+class LineReader {
+  private reader: ReadableStreamDefaultReader<Uint8Array>
+  private decoder = new TextDecoder()
+  private buffer = ""
+
+  constructor(stream: ReadableStream<Uint8Array>) {
+    this.reader = stream.getReader()
+  }
+
+  async readLine(): Promise<string | null> {
+    while (!this.buffer.includes("\n")) {
+      const { done, value } = await this.reader.read()
+      if (done) {
+        const remaining = this.buffer.trim()
+        this.buffer = ""
+        return remaining.length > 0 ? remaining : null
+      }
+      this.buffer += this.decoder.decode(value, { stream: true })
+    }
+    const idx = this.buffer.indexOf("\n")
+    const line = this.buffer.slice(0, idx)
+    this.buffer = this.buffer.slice(idx + 1)
+    return line
+  }
+
+  cancel() {
+    this.reader.cancel().catch(() => {})
+  }
+}
+
 class HarnessClient {
   private binaryPath: string
+  private proc: ReturnType<typeof Bun.spawn> | null = null
+  private lineReader: LineReader | null = null
+  private useStream: boolean | null = null
+  private chain: Promise<void> = Promise.resolve()
 
   constructor(binaryPath?: string) {
     const envPath = process.env.SONDERA_ADAPTER_PATH
@@ -117,9 +180,84 @@ class HarnessClient {
     }
   }
 
-  async adjudicate(
-    event: AdapterRequest,
-  ): Promise<AdjudicationResponse> {
+  async adjudicate(event: AdapterRequest): Promise<AdjudicationResponse> {
+    const token = this.chain
+    let release: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    this.chain = gate
+
+    await token
+    try {
+      return await this._adjudicate(event)
+    } finally {
+      release!()
+    }
+  }
+
+  private async _adjudicate(event: AdapterRequest): Promise<AdjudicationResponse> {
+    if (this.useStream === false) {
+      return this.oneshotAdjudicate(event)
+    }
+
+    try {
+      await this.ensureStreamProcess()
+      const stdin = this.proc!.stdin as unknown as { write: (d: string) => void }
+      stdin.write(JSON.stringify(event) + "\n")
+      const line = await this.lineReader!.readLine()
+      if (line === null) throw new Error("stream closed")
+      const result = JSON.parse(line) as AdjudicationResponse
+      this.useStream = true
+      return result
+    } catch (err) {
+      this.killStream()
+      if (this.useStream === null) {
+        this.useStream = false
+        return this.oneshotAdjudicate(event)
+      }
+      console.error(`[sondera] stream error, allowing:`, err)
+      return { decision: "allow" }
+    }
+  }
+
+  private async ensureStreamProcess() {
+    if (this.proc && (this.proc as any).exitCode === null) return
+
+    this.proc = Bun.spawn({
+      cmd: [this.binaryPath, "stream"],
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    this.lineReader = new LineReader(this.proc.stdout as ReadableStream<Uint8Array>)
+
+    const capturedProc = this.proc
+    capturedProc.exited.then((code) => {
+      if (this.proc === capturedProc) {
+        if (code !== 0 && this.useStream !== false) {
+          console.error(`[sondera] stream process exited with code ${code}`)
+        }
+        this.proc = null
+        this.lineReader = null
+      }
+    })
+  }
+
+  private killStream() {
+    if (this.proc) {
+      try {
+        if (!(this.proc as any).killed) (this.proc as any).kill()
+      } catch {}
+    }
+    if (this.lineReader) {
+      this.lineReader.cancel()
+    }
+    this.proc = null
+    this.lineReader = null
+  }
+
+  private async oneshotAdjudicate(event: AdapterRequest): Promise<AdjudicationResponse> {
     const proc = Bun.spawn({
       cmd: [this.binaryPath, "adjudicate"],
       stdin: "pipe",
@@ -134,9 +272,7 @@ class HarnessClient {
 
     if (exitCode !== 0) {
       const stderr = await new Response(proc.stderr).text()
-      console.error(
-        `[sondera] adapter error (exit ${exitCode}): ${stderr.trim()}`,
-      )
+      console.error(`[sondera] adapter error (exit ${exitCode}): ${stderr.trim()}`)
       return { decision: "allow" }
     }
 
@@ -249,20 +385,19 @@ export const SonderaPlugin = async ({
       try {
         result = await c.adjudicate(event)
       } catch (err) {
-        console.error(`[sondera] adjudication failed, allowing by default:`, err)
+        console.error(new AdjudicationError(err))
         return
       }
 
       if (result.decision === "deny") {
-        const reason = result.reason || "action denied by policy"
-        const policyCtx = formatPolicyContext(result)
-        const msg = policyCtx ? `${reason}\n\n${policyCtx}` : reason
-        throw new Error(`[sondera] ${msg}`)
+        throw new PolicyDenyError(result)
       }
 
       if (result.decision === "escalate") {
         const reason = result.reason || "action requires approval"
-        console.warn(`[sondera] escalation: ${reason}`)
+        const policyCtx = formatPolicyContext(result)
+        const msg = policyCtx ? `${reason}\n${policyCtx}` : reason
+        console.warn(`[sondera] escalation: ${msg}`)
       }
     },
 
@@ -283,7 +418,7 @@ export const SonderaPlugin = async ({
       try {
         await c.adjudicate(event)
       } catch (err) {
-        console.error(`[sondera] after-hook adjudication failed:`, err)
+        console.error(new AdjudicationError(err))
       }
     },
   }

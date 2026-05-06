@@ -36,6 +36,11 @@ export function normalizeEvent(
   }
 }
 
+function str(val: unknown): string | undefined {
+  if (typeof val === "string" && val.length > 0) return val
+  return undefined
+}
+
 export function toolArgs(
   tool: string,
   args: Record<string, unknown>,
@@ -44,40 +49,40 @@ export function toolArgs(
     case "bash":
       return {
         command: (args.command as string) || "",
-        workdir: args.workdir || undefined,
+        workdir: str(args.workdir),
       }
     case "read":
       return {
-        path: args.filePath || args.path || "",
+        path: str(args.filePath) || str(args.path) || "",
       }
     case "edit":
       return {
-        path: args.filePath || args.path || "",
-        old_content: args.oldString || undefined,
-        new_content: args.newString || undefined,
+        path: str(args.filePath) || str(args.path) || "",
+        old_content: str(args.oldString),
+        new_content: str(args.newString),
       }
     case "write":
       return {
-        path: args.filePath || args.path || "",
-        content: args.content || undefined,
+        path: str(args.filePath) || str(args.path) || "",
+        content: str(args.content),
       }
     case "apply_patch":
       return {
-        patch_text: args.patchText || "",
+        patch_text: (args.patchText as string) || "",
       }
     case "webfetch":
       return {
-        url: args.url || "",
-        format: args.format || undefined,
+        url: (args.url as string) || "",
+        format: str(args.format),
       }
     case "glob":
       return {
-        pattern: args.pattern || "",
+        pattern: (args.pattern as string) || "",
       }
     case "grep":
       return {
-        pattern: args.pattern || "",
-        include: args.include || undefined,
+        pattern: (args.pattern as string) || "",
+        include: str(args.include),
       }
     default:
       return args

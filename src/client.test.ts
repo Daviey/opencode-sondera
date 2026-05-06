@@ -34,7 +34,7 @@ function makeMockSpawn(exitCode: number, stdout: string, stderr: string = "") {
   }))
 }
 
-describe("HarnessClient", () => {
+describe("HarnessClient (oneshot mode)", () => {
   describe("constructor", () => {
     it("uses provided binaryPath", () => {
       const c = new HarnessClient("/usr/local/bin/adapter")
@@ -61,7 +61,7 @@ describe("HarnessClient", () => {
       const mockSpawn = makeMockSpawn(0, JSON.stringify({ decision: "allow" }))
       Bun.spawn = mockSpawn as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       const result = await c.adjudicate({
         trajectory_id: "t1",
         agent_id: "a1",
@@ -80,7 +80,7 @@ describe("HarnessClient", () => {
       const mockSpawn = makeMockSpawn(0, JSON.stringify(response))
       Bun.spawn = mockSpawn as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       const result = await c.adjudicate({
         trajectory_id: "t1",
         agent_id: "a1",
@@ -98,7 +98,7 @@ describe("HarnessClient", () => {
       const mockSpawn = makeMockSpawn(1, "", "Error: connection refused")
       Bun.spawn = mockSpawn as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       const result = await c.adjudicate({
         trajectory_id: "t1",
         agent_id: "a1",
@@ -115,7 +115,7 @@ describe("HarnessClient", () => {
       const mockSpawn = makeMockSpawn(0, "not json at all")
       Bun.spawn = mockSpawn as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       const result = await c.adjudicate({
         trajectory_id: "t1",
         agent_id: "a1",
@@ -133,7 +133,7 @@ describe("HarnessClient", () => {
       const mockSpawn = makeMockSpawn(0, JSON.stringify(response))
       Bun.spawn = mockSpawn as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       const result = await c.adjudicate({
         trajectory_id: "t1",
         agent_id: "a1",
@@ -158,7 +158,7 @@ describe("HarnessClient", () => {
       const mockSpawn = makeMockSpawn(0, JSON.stringify(response))
       Bun.spawn = mockSpawn as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       const result = await c.adjudicate({
         trajectory_id: "t1",
         agent_id: "a1",
@@ -183,7 +183,7 @@ describe("HarnessClient", () => {
         exited: Promise.resolve(0),
       })) as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       await c.adjudicate({
         trajectory_id: "t1",
         agent_id: "a1",
@@ -206,7 +206,7 @@ describe("HarnessClient", () => {
       const mockSpawn = makeMockSpawn(0, '{"decision":"allow"}')
       Bun.spawn = mockSpawn as any
 
-      const c = new HarnessClient("/custom/adapter-bin")
+      const c = new HarnessClient("/custom/adapter-bin", true)
       await c.adjudicate({
         trajectory_id: "t1",
         agent_id: "a1",
@@ -230,7 +230,7 @@ describe("HarnessClient", () => {
         exited: Promise.resolve(0),
       })) as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       expect(await c.health()).toBe(true)
     })
 
@@ -241,7 +241,7 @@ describe("HarnessClient", () => {
         exited: Promise.resolve(1),
       })) as any
 
-      const c = new HarnessClient("/bin/adapter")
+      const c = new HarnessClient("/bin/adapter", true)
       expect(await c.health()).toBe(false)
     })
 
@@ -250,8 +250,253 @@ describe("HarnessClient", () => {
         throw new Error("ENOENT")
       }) as any
 
-      const c = new HarnessClient("/nonexistent")
+      const c = new HarnessClient("/nonexistent", true)
       expect(await c.health()).toBe(false)
     })
+  })
+})
+
+function createMockOutputStream() {
+  let controller: ReadableStreamDefaultController<Uint8Array>
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c
+    },
+  })
+  return {
+    stream,
+    push(text: string) {
+      controller.enqueue(new TextEncoder().encode(text))
+    },
+    close() {
+      controller.close()
+    },
+  }
+}
+
+describe("HarnessClient (stream mode)", () => {
+  it("uses persistent stream process for multiple calls", async () => {
+    const output = createMockOutputStream()
+    let resolveExited: (code: number) => void
+    const exitedPromise = new Promise<number>((r) => {
+      resolveExited = r
+    })
+
+    const writtenData: string[] = []
+    const mockProc = {
+      stdin: {
+        write: mock((data: string) => {
+          writtenData.push(data.trim())
+          output.push(JSON.stringify({ decision: "allow" }) + "\n")
+        }),
+        end: mock(() => {}),
+      },
+      stdout: output.stream,
+      stderr: new ReadableStream({ start(c) { c.close() } }),
+      exitCode: null as number | null,
+      exited: exitedPromise,
+      killed: false,
+      kill: mock(() => {
+        mockProc.exitCode = 1
+        output.close()
+        resolveExited(1)
+      }),
+    }
+
+    let spawnCount = 0
+    Bun.spawn = mock(() => {
+      spawnCount++
+      return mockProc
+    }) as any
+
+    const c = new HarnessClient("/bin/adapter")
+    const r1 = await c.adjudicate({
+      trajectory_id: "t1", agent_id: "a1", tool: "bash",
+      action: "ShellCommand", args: { command: "ls" }, event_type: "before",
+    })
+    const r2 = await c.adjudicate({
+      trajectory_id: "t2", agent_id: "a1", tool: "bash",
+      action: "ShellCommand", args: { command: "pwd" }, event_type: "before",
+    })
+
+    expect(r1.decision).toBe("allow")
+    expect(r2.decision).toBe("allow")
+    expect(spawnCount).toBe(1)
+    expect(writtenData).toHaveLength(2)
+    expect(JSON.parse(writtenData[0]).trajectory_id).toBe("t1")
+    expect(JSON.parse(writtenData[1]).trajectory_id).toBe("t2")
+  })
+
+  it("falls back to oneshot when stream command is unsupported", async () => {
+    let callIdx = 0
+    Bun.spawn = mock(() => {
+      callIdx++
+      if (callIdx === 1) {
+        return {
+          stdin: {
+            write: mock(() => {}),
+            end: mock(() => {}),
+          },
+          stdout: new ReadableStream({ start(c) { c.close() } }),
+          stderr: makeStdout("unknown command: stream"),
+          exitCode: 1,
+          exited: Promise.resolve(1),
+          killed: false,
+          kill: mock(() => {}),
+        }
+      }
+      return {
+        stdin: {
+          write: mock((data: string) => {}),
+          end: mock(() => {}),
+        },
+        stdout: makeStdout(JSON.stringify({ decision: "allow" })),
+        stderr: makeStdout(""),
+        exitCode: 0,
+        exited: Promise.resolve(0),
+        killed: false,
+        kill: mock(() => {}),
+      }
+    }) as any
+
+    const c = new HarnessClient("/bin/adapter")
+    const result = await c.adjudicate({
+      trajectory_id: "t1", agent_id: "a1", tool: "bash",
+      action: "ShellCommand", args: { command: "ls" }, event_type: "before",
+    })
+
+    expect(result.decision).toBe("allow")
+    expect((c as any).useStream).toBe(false)
+    expect(callIdx).toBe(2)
+  })
+
+  it("reconnects stream process after crash", async () => {
+    let spawnCount = 0
+
+    Bun.spawn = mock(() => {
+      spawnCount++
+      const output = createMockOutputStream()
+      const isFirst = spawnCount === 1
+      let wrote = false
+
+      return {
+        stdin: {
+          write: mock((data: string) => {
+            if (!wrote) {
+              wrote = true
+              output.push(JSON.stringify({ decision: "allow" }) + "\n")
+              if (isFirst) {
+                setTimeout(() => {
+                  output.close()
+                }, 0)
+              }
+            }
+          }),
+          end: mock(() => {}),
+        },
+        stdout: output.stream,
+        stderr: new ReadableStream({ start(c) { c.close() } }),
+        exitCode: null as number | null,
+        exited: new Promise<number>((resolve) => {
+          if (isFirst) {
+            setTimeout(() => resolve(1), 5)
+          }
+        }),
+        killed: false,
+        kill: mock(() => {}),
+      }
+    }) as any
+
+    const c = new HarnessClient("/bin/adapter")
+    const r1 = await c.adjudicate({
+      trajectory_id: "t1", agent_id: "a1", tool: "bash",
+      action: "ShellCommand", args: {}, event_type: "before",
+    })
+    expect(r1.decision).toBe("allow")
+    expect(spawnCount).toBe(1)
+
+    await new Promise((r) => setTimeout(r, 20))
+
+    const r2 = await c.adjudicate({
+      trajectory_id: "t2", agent_id: "a1", tool: "bash",
+      action: "ShellCommand", args: {}, event_type: "before",
+    })
+    expect(r2.decision).toBe("allow")
+    expect(spawnCount).toBe(2)
+  })
+
+  it("returns deny from stream mode", async () => {
+    const output = createMockOutputStream()
+    const mockProc = {
+      stdin: {
+        write: mock((data: string) => {
+          output.push(JSON.stringify({ decision: "deny", reason: "blocked" }) + "\n")
+        }),
+        end: mock(() => {}),
+      },
+      stdout: output.stream,
+      stderr: new ReadableStream({ start(c) { c.close() } }),
+      exitCode: null as number | null,
+      exited: new Promise(() => {}),
+      killed: false,
+      kill: mock(() => {}),
+    }
+
+    Bun.spawn = mock(() => mockProc) as any
+
+    const c = new HarnessClient("/bin/adapter")
+    const result = await c.adjudicate({
+      trajectory_id: "t1", agent_id: "a1", tool: "bash",
+      action: "ShellCommand", args: { command: "rm -rf /" }, event_type: "before",
+    })
+
+    expect(result.decision).toBe("deny")
+    expect(result.reason).toBe("blocked")
+  })
+
+  it("serializes concurrent calls", async () => {
+    const output = createMockOutputStream()
+    const order: string[] = []
+
+    const mockProc = {
+      stdin: {
+        write: mock((data: string) => {
+          const id = JSON.parse(data).trajectory_id
+          order.push(id)
+          output.push(JSON.stringify({ decision: "allow" }) + "\n")
+        }),
+        end: mock(() => {}),
+      },
+      stdout: output.stream,
+      stderr: new ReadableStream({ start(c) { c.close() } }),
+      exitCode: null as number | null,
+      exited: new Promise(() => {}),
+      killed: false,
+      kill: mock(() => {}),
+    }
+
+    Bun.spawn = mock(() => mockProc) as any
+
+    const c = new HarnessClient("/bin/adapter")
+
+    const [r1, r2, r3] = await Promise.all([
+      c.adjudicate({
+        trajectory_id: "1" as any, agent_id: "a", tool: "bash",
+        action: "ShellCommand", args: {}, event_type: "before",
+      }),
+      c.adjudicate({
+        trajectory_id: "2" as any, agent_id: "a", tool: "bash",
+        action: "ShellCommand", args: {}, event_type: "before",
+      }),
+      c.adjudicate({
+        trajectory_id: "3" as any, agent_id: "a", tool: "bash",
+        action: "ShellCommand", args: {}, event_type: "before",
+      }),
+    ])
+
+    expect(r1.decision).toBe("allow")
+    expect(r2.decision).toBe("allow")
+    expect(r3.decision).toBe("allow")
+    expect(order).toEqual(["1", "2", "3"])
   })
 })

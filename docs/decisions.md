@@ -113,3 +113,22 @@ proc.stdin.getWriter()  // TypeError: not a function
 ```
 
 This was discovered during live testing. `getWriter()` works in standalone Bun scripts but not in opencode's Bun runtime. The bundled plugin uses the `FileSink` API directly.
+
+
+## ADR-008: Persistent Stream Process vs One-Shot Spawns
+
+Each tool call used to spawn a new adapter subprocess (oneshot mode). This added 20-50ms overhead per call from process creation, tarpc connection setup, and OS pipe teardown.
+
+The adapter now supports a `stream` subcommand that reads NDJSON from stdin and writes NDJSON to stdout over a single persistent connection to the harness server. The TS client keeps this process alive across tool calls.
+
+The client tries stream mode on the first adjudicate call. If the adapter binary does not support the `stream` command (old binary), the process exits immediately and the client falls back to oneshot mode for all future calls. This detection happens once and the choice is cached.
+
+Benefits: eliminates per-call spawn overhead, reuses the tarpc Unix socket connection, reduces latency from ~50ms to the time for a single tarpc round trip.
+
+Tradeoffs:
+
+Concurrent calls must be serialized because the NDJSON protocol is line-based and the persistent process handles one request at a time. The client uses a promise chain to serialize. This is acceptable because tool calls are already sequential in practice (opencode dispatches them one at a time).
+
+Process lifecycle: if the stream process crashes (harness server restarts, OOM, etc.), the client detects the dead process and spawns a new one on the next call. The exited promise handler invalidates the cached process reference. The `ensureStreamProcess` method checks `exitCode === null` before reusing.
+
+The oneshot path is preserved for tests (`forceOneshot` constructor parameter) and as a fallback for old adapter binaries. It is also used if the stream process repeatedly fails.
