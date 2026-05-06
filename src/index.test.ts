@@ -393,22 +393,36 @@ describe("SonderaPlugin (dry-run mode)", () => {
     process.env.SONDERA_DRY_RUN = "1"
     mockSpawnHealthyThenRespond(0, 0, JSON.stringify({ decision: "deny", reason: "would block" }))
 
-    const warnSpy = mock(() => {})
-    const origWarn = console.warn
-    console.warn = warnSpy
+    const fetchCalls: any[] = []
+    const origFetch = globalThis.fetch
+    globalThis.fetch = mock((url: string, opts: any) => {
+      fetchCalls.push({ url, opts })
+      return Promise.resolve(new Response())
+    }) as any
 
-    const plugin = await makePlugin()
+    const mod = await import("./index")
+    mod._reset()
+    const plugin = await mod.SonderaPlugin({
+      directory: "/tmp",
+      project: { path: "/tmp" },
+      client: {} as any,
+      $: {} as any,
+      worktree: "/tmp",
+      serverUrl: new URL("http://localhost:12345"),
+    })
 
     const input = { tool: "bash", sessionId: "s1" }
     const output = { args: { command: "rm -rf /" } }
 
     await plugin["tool.execute.before"](input, output)
 
-    expect(warnSpy).toHaveBeenCalled()
-    const call = (warnSpy.mock.calls as unknown as string[][])[0] as string[]
-    expect(call[0]).toContain("dry-run deny")
+    expect(fetchCalls.length).toBeGreaterThanOrEqual(1)
+    const toastCall = fetchCalls.find((c) => c.url.includes("show-toast"))
+    expect(toastCall).toBeDefined()
+    const body = JSON.parse(toastCall.opts.body)
+    expect(body.message).toContain("Would deny")
 
-    console.warn = origWarn
+    globalThis.fetch = origFetch
   })
 })
 

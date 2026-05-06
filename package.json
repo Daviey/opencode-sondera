@@ -18,6 +18,7 @@
     "src/config.ts",
     "src/audit.ts",
     "src/metrics.ts",
+    "src/toast.ts",
     "adapter/src/main.rs",
     "adapter/Cargo.toml",
     "README.md",
@@ -27,7 +28,8 @@
     "build:adapter": "cd adapter && cargo build --release",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "sync-bundle": "bun scripts/sync-bundle.ts"
+    "sync-bundle": "bun scripts/sync-bundle.ts",
+    "prepublishOnly": "bun run sync-bundle"
   },
   "keywords": ["opencode", "sondera", "cedar", "policy", "security", "ai-safety"],
   "license": "Apache-2.0",
