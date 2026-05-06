@@ -39,19 +39,59 @@ This plugin is the glue between opencode and the harness. It normalises tool cal
 
 ## Install
 
-### 1. Build the Rust adapter binary
+### Quick install (curl)
 
-**Using nix-shell (recommended):**
+Download the adapter binary and plugin from the [latest release](https://github.com/Daviey/opencode-sondera/releases/latest):
 
 ```bash
-# Clone the sondera repo alongside this project
+# Pick the right binary for your platform
+ARCH=$(uname -m)
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$ARCH-$OS" in
+  x86_64-linux)  TARGET=x86_64-unknown-linux-gnu ;;
+  aarch64-linux) TARGET=aarch64-unknown-linux-gnu ;;
+  x86_64-darwin) TARGET=x86_64-apple-darwin ;;
+  arm64-darwin)  TARGET=aarch64-apple-darwin ;;
+  *) echo "unsupported: $ARCH-$OS"; exit 1 ;;
+esac
+
+mkdir -p ~/.local/bin
+curl -L "https://github.com/Daviey/opencode-sondera/releases/latest/download/sondera-opencode-adapter-${TARGET}" \
+  -o ~/.local/bin/sondera-opencode-adapter
+chmod +x ~/.local/bin/sondera-opencode-adapter
+
+mkdir -p ~/.config/opencode/plugins
+curl -L https://github.com/Daviey/opencode-sondera/releases/latest/download/sondera-bundled.ts \
+  -o ~/.config/opencode/plugins/sondera.ts
+```
+
+That gives you the adapter in `~/.local/bin/` and the plugin in `~/.config/opencode/plugins/`. opencode auto-loads `.ts` files from the plugins directory.
+
+### npm
+
+```bash
+npm install opencode-sondera
+```
+
+Then reference it in your opencode config:
+
+```json
+// opencode.json
+{
+  "plugin": ["opencode-sondera"]
+}
+```
+
+### Build the adapter from source
+
+You need this if you want to hack on the adapter or your platform has no pre-built binary.
+
+**Using nix-shell:**
+
+```bash
 cd ..
 git clone https://github.com/sondera-ai/sondera-coding-agent-hooks.git
-
-# Copy the adapter app into the sondera workspace
 cp -r opencode/sondera/adapter sondera-coding-agent-hooks/apps/opencode
-
-# Build with nix-shell (provides OpenSSL etc.)
 cd sondera-coding-agent-hooks
 nix-shell ../opencode/sondera/shell.nix --run \
   "cargo build --bin sondera-opencode-adapter"
@@ -70,7 +110,7 @@ Then put the binary on PATH:
 cp target/debug/sondera-opencode-adapter ~/.local/bin/
 ```
 
-### 2. Start the harness server
+### Start the harness server
 
 ```bash
 cd ../sondera-coding-agent-hooks
@@ -78,55 +118,11 @@ nix-shell ../opencode/sondera/shell.nix --run \
   "./target/debug/sondera-harness-server -v"
 ```
 
-### 3. Verify the connection
+### Verify the connection
 
 ```bash
 sondera-opencode-adapter health
 # {"status":"ok"}
-```
-
-### 4. Install the plugin
-
-**Option A: Local plugin (single file, recommended)**
-
-Copy the bundled TypeScript file to `~/.config/opencode/plugins/` (global) or
-`.opencode/plugins/` (per-project):
-
-```bash
-# Global
-mkdir -p ~/.config/opencode/plugins
-cp sondera-bundled.ts ~/.config/opencode/plugins/sondera.ts
-
-# Per-project
-mkdir -p .opencode/plugins
-cp sondera-bundled.ts .opencode/plugins/sondera.ts
-```
-
-**Option B: Local plugin (multi-file)**
-
-Copy the TypeScript source into `.opencode/plugins/` in your project:
-
-```bash
-mkdir -p .opencode/plugins/sondera
-cp src/*.ts .opencode/plugins/sondera/
-```
-
-> **Note:** When using multi-file plugins in the auto-loaded `plugins/` directory,
-> put them in a subdirectory so that non-plugin modules aren't loaded directly.
-
-**Option C: npm package**
-
-```bash
-npm install opencode-sondera
-```
-
-Then reference it in your opencode config:
-
-```json
-// opencode.json
-{
-  "plugin": ["opencode-sondera"]
-}
 ```
 
 ## Nix Support
