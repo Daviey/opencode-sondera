@@ -21,19 +21,66 @@ jobs:
       - run: npm ci || npm install
       - run: npm publish --provenance --access public
 
+  build-adapter:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            use-cross: true
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            use-cross: true
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            use-cross: false
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            use-cross: false
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install cross
+        if: matrix.use-cross
+        run: cargo install cross --locked
+      - name: Build adapter (cross)
+        if: matrix.use-cross
+        run: cross build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
+      - name: Build adapter (native)
+        if: ${{ !matrix.use-cross }}
+        run: cargo build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: sondera-opencode-adapter-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/sondera-opencode-adapter
+          if-no-files-found: error
+
   github-release:
-    needs: publish-npm
+    needs: [publish-npm, build-adapter]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Generate release notes
-        id: notes
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+      - name: Prepare release assets
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          mkdir -p release-assets
+          for dir in artifacts/*/; do
+            target=$(basename "$dir")
+            cp "${dir}sondera-opencode-adapter" "release-assets/sondera-opencode-adapter-${target}"
+            chmod +x "release-assets/sondera-opencode-adapter-${target}"
+          done
+          ls -la release-assets/
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.notes.outputs.tag }}
+          tag_name: ${{ github.ref_name }}
           generate_release_notes: true
+          files: release-assets/*
