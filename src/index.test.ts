@@ -236,3 +236,109 @@ describe("SonderaPlugin", () => {
     await plugin["tool.execute.after"](input, output)
   })
 })
+
+function createMockOutputStream() {
+  let controller: ReadableStreamDefaultController<Uint8Array>
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) { controller = c },
+  })
+  return {
+    stream,
+    push(text: string) { controller.enqueue(new TextEncoder().encode(text)) },
+    close() { controller.close() },
+  }
+}
+
+describe("SonderaPlugin (stream mode)", () => {
+  it("uses persistent stream for multiple tool calls", async () => {
+    const healthOutput = createMockOutputStream()
+    healthOutput.close()
+    const streamOutput = createMockOutputStream()
+
+    let callIdx = 0
+    Bun.spawn = mock(() => {
+      callIdx++
+      if (callIdx === 1) {
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: healthOutput.stream,
+          stderr: makeStdout(""),
+          exited: Promise.resolve(0),
+        }
+      }
+      return {
+        stdin: {
+          write: mock((data: string) => {
+            streamOutput.push(JSON.stringify({ decision: "allow" }) + "\n")
+          }),
+          end: mock(() => {}),
+        },
+        stdout: streamOutput.stream,
+        stderr: makeStdout(""),
+        exitCode: null,
+        exited: new Promise(() => {}),
+        killed: false,
+        kill: mock(() => {}),
+      }
+    }) as any
+
+    const plugin = await makePlugin()
+
+    await plugin["tool.execute.before"](
+      { tool: "bash", sessionId: "s1" },
+      { args: { command: "ls" } },
+    )
+    await plugin["tool.execute.before"](
+      { tool: "read", sessionId: "s1" },
+      { args: { filePath: "/foo.ts" } },
+    )
+
+    expect(callIdx).toBe(2)
+  })
+
+  it("blocks on deny via stream mode", async () => {
+    const healthOutput = createMockOutputStream()
+    healthOutput.close()
+    const streamOutput = createMockOutputStream()
+
+    let callIdx = 0
+    Bun.spawn = mock(() => {
+      callIdx++
+      if (callIdx === 1) {
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: healthOutput.stream,
+          stderr: makeStdout(""),
+          exited: Promise.resolve(0),
+        }
+      }
+      return {
+        stdin: {
+          write: mock((data: string) => {
+            streamOutput.push(JSON.stringify({ decision: "deny", reason: "blocked" }) + "\n")
+          }),
+          end: mock(() => {}),
+        },
+        stdout: streamOutput.stream,
+        stderr: makeStdout(""),
+        exitCode: null,
+        exited: new Promise(() => {}),
+        killed: false,
+        kill: mock(() => {}),
+      }
+    }) as any
+
+    const plugin = await makePlugin()
+
+    try {
+      await plugin["tool.execute.before"](
+        { tool: "bash", sessionId: "s1" },
+        { args: { command: "rm -rf /" } },
+      )
+      expect.unreachable("should have thrown")
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(PolicyDenyError)
+      expect(err.reason).toBe("blocked")
+    }
+  })
+})
