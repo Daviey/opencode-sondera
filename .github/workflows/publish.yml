@@ -114,7 +114,8 @@ jobs:
         run: |
           mkdir -p release-assets
           for dir in artifacts/*/; do
-            target=$(basename "$dir")
+            artifact_name=$(basename "$dir")
+            target=${artifact_name#sondera-opencode-adapter-}
             binary=$(find "$dir" -name "sondera-opencode-adapter" -type f | head -1)
             if [ -n "$binary" ]; then
               cp "$binary" "release-assets/sondera-opencode-adapter-${target}"
