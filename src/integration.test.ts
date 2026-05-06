@@ -3,7 +3,14 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs"
 import { join } from "path"
 
 const HARNESS_REPO = process.env.SONDERA_HARNESS_REPO || join(import.meta.dir, "../../sondera-coding-agent-hooks")
-const ADAPTER_BIN = process.env.SONDERA_ADAPTER_BIN || join(HARNESS_REPO, "target/debug/sondera-opencode-adapter")
+function findAdapter(): string {
+  const candidates = [
+    join(HARNESS_REPO, "target/debug/sondera-opencode-adapter"),
+    join(HARNESS_REPO, "apps/opencode/target/debug/sondera-opencode-adapter"),
+  ]
+  return candidates.find(p => existsSync(p)) || candidates[0]
+}
+const ADAPTER_BIN = process.env.SONDERA_ADAPTER_BIN || findAdapter()
 const HARNESS_BIN = join(HARNESS_REPO, "target/debug/sondera-harness-server")
 const POLICY_PATH = join(HARNESS_REPO, "policies")
 const SOCKET_PATH = join(process.env.HOME || "/tmp", ".sondera/sondera-harness.sock")
@@ -71,8 +78,8 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
       stderr: "pipe",
       stdout: "pipe",
     })
-    await waitForSocket()
-  })
+    await waitForSocket(20000)
+  }, 20000)
 
   afterAll(() => {
     if (harnessProc) { harnessProc.kill("SIGTERM"); harnessProc = null }
