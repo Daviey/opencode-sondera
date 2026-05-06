@@ -19,6 +19,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest
       - run: npm ci || npm install
+      - run: npm run sync-bundle
       - run: npm publish --provenance --access public || echo "Package version may already exist"
 
   publish-github:
@@ -35,6 +36,7 @@ jobs:
           node-version: "24"
           registry-url: https://npm.pkg.github.com
       - run: npm install
+      - run: npm run sync-bundle
       - run: npm publish --registry https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

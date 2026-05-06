@@ -2,3 +2,4 @@ AGENTS.md
 node_modules/
 target/
 .env
+sondera-bundled.ts
