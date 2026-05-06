@@ -1,6 +1,6 @@
 {
   "name": "opencode-sondera",
-  "version": "0.2.0",
+  "version": "0.0.1",
   "description": "Sondera Cedar policy enforcement plugin for opencode",
   "main": "sondera-bundled.ts",
   "types": "src/index.ts",
@@ -27,11 +27,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sondera-ai/opencode-sondera"
+    "url": "https://github.com/Daviey/opencode-sondera"
   },
-  "homepage": "https://github.com/sondera-ai/opencode-sondera",
+  "homepage": "https://github.com/Daviey/opencode-sondera",
   "bugs": {
-    "url": "https://github.com/sondera-ai/opencode-sondera/issues"
+    "url": "https://github.com/Daviey/opencode-sondera/issues"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": "*"
