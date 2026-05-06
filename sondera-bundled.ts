@@ -126,6 +126,10 @@ function toolArgs(
         pattern: (args.pattern as string) || "",
         include: str(args.include),
       }
+    case "websearch":
+      return {
+        query: (args.query as string) || (args.search_query as string) || "",
+      }
     default:
       return args
   }

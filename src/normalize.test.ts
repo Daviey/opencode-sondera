@@ -50,6 +50,22 @@ describe("normalizeEvent", () => {
     expect(normalizeEvent("websearch", {}, "/", "s", "a", "before").action).toBe("WebSearch")
   })
 
+  it("maps skill to SkillLoad", () => {
+    expect(normalizeEvent("skill", {}, "/", "s", "a", "before").action).toBe("SkillLoad")
+  })
+
+  it("maps todowrite to TodoUpdate", () => {
+    expect(normalizeEvent("todowrite", {}, "/", "s", "a", "before").action).toBe("TodoUpdate")
+  })
+
+  it("maps lsp to LspQuery", () => {
+    expect(normalizeEvent("lsp", {}, "/", "s", "a", "before").action).toBe("LspQuery")
+  })
+
+  it("maps question to Question", () => {
+    expect(normalizeEvent("question", {}, "/", "s", "a", "before").action).toBe("Question")
+  })
+
   it("maps task to SubAgent", () => {
     expect(normalizeEvent("task", {}, "/", "s", "a", "before").action).toBe("SubAgent")
   })
@@ -118,5 +134,33 @@ describe("toolArgs", () => {
   it("returns raw args for unknown tools", () => {
     const args = { foo: "bar", baz: 42 }
     expect(toolArgs("unknown_tool", args)).toEqual(args)
+  })
+
+  it("extracts websearch query", () => {
+    expect(toolArgs("websearch", { query: "rust async" })).toEqual({ query: "rust async" })
+  })
+
+  it("extracts websearch query from search_query fallback", () => {
+    expect(toolArgs("websearch", { search_query: "cedar policy" })).toEqual({ query: "cedar policy" })
+  })
+
+  it("omits empty optional fields", () => {
+    const result = toolArgs("bash", { command: "ls", workdir: "" })
+    expect(result).toEqual({ command: "ls", workdir: undefined })
+  })
+
+  it("omits undefined optional fields in edit", () => {
+    const result = toolArgs("edit", { filePath: "/a.ts" })
+    expect(result).toEqual({ path: "/a.ts", old_content: undefined, new_content: undefined })
+  })
+
+  it("returns raw args for task (SubAgent)", () => {
+    const args = { prompt: "do stuff", subagent_type: "general" }
+    expect(toolArgs("task", args)).toEqual(args)
+  })
+
+  it("returns raw args for skill (SkillLoad)", () => {
+    const args = { skill_name: "debugging" }
+    expect(toolArgs("skill", args)).toEqual(args)
   })
 })
