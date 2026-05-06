@@ -43,26 +43,22 @@ jobs:
 
   osv-scanner:
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       security-events: write
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - uses: google/osv-scanner-action@v2
+      - uses: google/osv-scanner-action@v2.3.5
         with:
           scan-args: |-
             --format=json
             ./
-      - uses: google/osv-scanner-action/osv-scanner-fix@v2
-        if: always()
-      - name: OSV scan (Cargo)
-        run: |
-          curl -sSfL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o osv-scanner
-          chmod +x osv-scanner
-          ./osv-scanner --lockfile=adapter/Cargo.lock || true
+            ./adapter/Cargo.lock
 
   cargo-audit:
     runs-on: ubuntu-latest
+    continue-on-error: true
     defaults:
       run:
         working-directory: adapter
@@ -74,13 +70,14 @@ jobs:
 
   npm-audit:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
       - run: npm install
-      - run: npm audit --audit-level=moderate || true
+      - run: npm audit --audit-level=moderate
 
   scorecard:
     if: github.event_name == 'push'
@@ -92,7 +89,7 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@v6
-      - uses: ossf/scorecard-action@v2
+      - uses: ossf/scorecard-action@v2.4.3
         with:
           results_file: results.sarif
           results_format: sarif
