@@ -1,12 +1,13 @@
 # opencode-sondera
 
 [![CI](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
+[![Security](https://github.com/Daviey/opencode-sondera/actions/workflows/security.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/security.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Daviey/opencode-sondera/main/coverage-badge.json)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
-[![CodeQL](https://img.shields.io/badge/codeql-SAST-blue)](https://github.com/Daviey/opencode-sondera/security/code-scanning?tool=CodeQL)
-[![gitleaks](https://img.shields.io/badge/gitleaks-secret%20scan-blue)](https://github.com/Daviey/opencode-sondera/security/secret-scanning)
-[![OSV](https://img.shields.io/badge/osv-vulnerability%20scan-blue)](https://github.com/Daviey/opencode-sondera/actions/workflows/security.yml)
+[![Release](https://github.com/Daviey/opencode-sondera/actions/workflows/publish.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/publish.yml)
 [![npm](https://img.shields.io/npm/v/opencode-sondera)](https://www.npmjs.com/package/opencode-sondera)
+[![GitHub Release](https://img.shields.io/github/v/release/Daviey/opencode-sondera)](https://github.com/Daviey/opencode-sondera/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Daviey/opencode-sondera/badge)](https://scorecard.dev/viewer/?uri=github.com/Daviey/opencode-sondera)
 
 A policy enforcement plugin for [opencode](https://opencode.ai) that screens every tool call against rules you define.
 
