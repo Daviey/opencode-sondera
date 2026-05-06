@@ -20,11 +20,13 @@
   "scripts": {
     "build:adapter": "cd adapter && cargo build --release",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "prepublishOnly": "bun test && tsc --noEmit"
+    "test": "bun test"
   },
   "keywords": ["opencode", "sondera", "cedar", "policy", "security", "ai-safety"],
   "license": "MIT",
+  "publishConfig": {
+    "provenance": true
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/Daviey/opencode-sondera"
