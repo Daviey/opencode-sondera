@@ -10,8 +10,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
@@ -28,14 +26,11 @@ jobs:
         run: |
           pct=$(grep "All files" coverage-output.txt | awk -F'|' '{gsub(/ /, "", $2); print $2}')
           printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"brightgreen"}\n' "$pct" > coverage-badge.json
-      - name: Commit coverage badge
+      - uses: actions/upload-artifact@v4
         if: github.event_name == 'push'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add coverage-badge.json
-          git diff --cached --quiet || git commit -m "Update coverage badge [skip ci]"
-          git push
+        with:
+          name: coverage-badge
+          path: coverage-badge.json
 
   adapter-check:
     runs-on: ubuntu-latest
