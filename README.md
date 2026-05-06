@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
 [![Security](https://github.com/Daviey/opencode-sondera/actions/workflows/security.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/security.yml)
-[![Coverage](https://codecov.io/gh/Daviey/opencode-sondera/branch/main/graph/badge.svg)](https://codecov.io/gh/Daviey/opencode-sondera)
+[![codecov](https://codecov.io/github/Daviey/opencode-sondera/graph/badge.svg?token=NS2GU7WBS3)](https://codecov.io/github/Daviey/opencode-sondera)
 [![Release](https://github.com/Daviey/opencode-sondera/actions/workflows/publish.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/publish.yml)
 [![npm](https://img.shields.io/npm/v/opencode-sondera)](https://www.npmjs.com/package/opencode-sondera)
 [![GitHub Release](https://img.shields.io/github/v/release/Daviey/opencode-sondera)](https://github.com/Daviey/opencode-sondera/releases)
