@@ -15,7 +15,7 @@ function findAdapter(): string {
 const ADAPTER_BIN = process.env.SONDERA_ADAPTER_BIN || findAdapter()
 const HARNESS_BIN = join(HARNESS_REPO, "target/debug/sondera-harness-server")
 const POLICY_PATH = join(HARNESS_REPO, "policies")
-const SOCKET_PATH = join(process.env.HOME || "/tmp", ".sondera/sondera-harness.sock")
+const SOCKET_PATH = process.env.SONDERA_SOCKET || join(process.env.HOME || "/tmp", ".sondera/sondera-harness.sock")
 const SONDERA_DIR = join(process.env.HOME || "/tmp", ".sondera")
 
 let harnessProc: ReturnType<typeof Bun.spawn> | null = null
@@ -25,7 +25,7 @@ function waitForSocket(maxMs = 15000): Promise<void> {
   return new Promise((resolve, reject) => {
     const check = () => {
       if (existsSync(SOCKET_PATH)) return resolve()
-      if (Date.now() - start > maxMs) return reject(new Error("socket not found after " + maxMs + "ms"))
+      if (Date.now() - start > maxMs) return reject(new Error("socket not found at " + SOCKET_PATH + " after " + maxMs + "ms"))
       setTimeout(check, 300)
     }
     check()
@@ -52,7 +52,7 @@ function adjudicate(request: object, timeoutMs = 15000): Promise<{ decision: str
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, RUST_LOG: "info" },
+      env: { ...process.env, RUST_LOG: "info", SONDERA_SOCKET: SOCKET_PATH },
     })
     proc.stdin.write(input)
     proc.stdin.end()
@@ -81,9 +81,11 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
     if (!existsSync(POLICY_PATH)) throw new Error("policy directory not found at " + POLICY_PATH)
 
     rmSync(SONDERA_DIR, { recursive: true, force: true })
-    mkdirSync(SONDERA_DIR, { recursive: true })
+    rmSync("/var/run/sondera", { recursive: true, force: true })
+    const socketDir = SOCKET_PATH.substring(0, SOCKET_PATH.lastIndexOf("/"))
+    mkdirSync(socketDir, { recursive: true })
 
-    harnessProc = Bun.spawn([HARNESS_BIN, "--policy-path", POLICY_PATH], {
+    harnessProc = Bun.spawn([HARNESS_BIN, "--policy-path", POLICY_PATH, "--socket", SOCKET_PATH], {
       env: { ...process.env, RUST_LOG: "info" },
       stderr: "pipe",
       stdout: "pipe",
@@ -91,29 +93,20 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
     await waitForSocket(20000)
   }, 20000)
 
-  afterAll(async () => {
+  afterAll(() => {
     if (harnessProc) {
-      try {
-        if (harnessProc.stderr && typeof harnessProc.stderr !== "number") {
-          const reader = (harnessProc.stderr as ReadableStream<Uint8Array>).getReader()
-          const chunks: string[] = []
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            chunks.push(new TextDecoder().decode(value))
-          }
-          const stderr = chunks.join("")
-          if (stderr) console.error("[harness stderr]", stderr.slice(-2000))
-        }
-      } catch {}
-      harnessProc.kill("SIGTERM")
+      harnessProc.kill("SIGKILL")
       harnessProc = null
     }
     rmSync(SONDERA_DIR, { recursive: true, force: true })
+    rmSync("/var/run/sondera", { recursive: true, force: true })
   })
 
   test("health check returns exit 0", async () => {
-    const proc = Bun.spawn([ADAPTER_BIN, "health"], { stdout: "pipe", stderr: "pipe" })
+    const proc = Bun.spawn([ADAPTER_BIN, "health"], {
+      stdout: "pipe", stderr: "pipe",
+      env: { ...process.env, SONDERA_SOCKET: SOCKET_PATH },
+    })
     const code = await proc.exited
     expect(code).toBe(0)
   })

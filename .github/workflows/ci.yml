@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+      - uses: dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
 
   integration:
     needs: [test, adapter-check]
@@ -65,34 +65,9 @@ jobs:
         working-directory: adapter
       - name: Install plugin deps
         run: bun install
-      - name: "Diagnostic - test adapter against harness"
-        run: |
-          rm -rf ~/.sondera && mkdir -p ~/.sondera
-          /tmp/harness/target/debug/sondera-harness-server --policy-path /tmp/harness/policies --verbose &> $HOME/harness-output.log &
-          HARNESS_PID=$!
-          for i in $(seq 1 30); do
-            [ -S ~/.sondera/sondera-harness.sock ] && break
-            sleep 1
-          done
-          echo "=== Socket exists ==="
-          ls -la ~/.sondera/sondera-harness.sock
-          echo "=== Health check ==="
-          echo '{}' | timeout 15 "$ADAPTER_BIN" health 2>&1 || echo "health exit code: $?"
-          echo "=== Allow request ==="
-          echo '{"tool":"bash","action":"ShellCommand","trajectory_id":"diag-allow-1","agent_id":"diag","args":{"command":"ls /tmp"},"cwd":"/tmp"}' | timeout 15 "$ADAPTER_BIN" adjudicate 2>&1
-          echo "=== Deny request ==="
-          echo '{"tool":"bash","action":"ShellCommand","trajectory_id":"diag-deny-2","agent_id":"diag","args":{"command":"rm -rf /"},"cwd":"/tmp"}' | timeout 15 "$ADAPTER_BIN" adjudicate 2>&1
-          echo "=== Harness stderr (last 200 lines) ==="
-          tail -200 $HOME/harness-output.log || echo "(no output captured)"
-          echo "=== Killing harness ==="
-          kill $HARNESS_PID 2>/dev/null
-          wait $HARNESS_PID 2>/dev/null || true
-        env:
-          ADAPTER_BIN: ${{ github.workspace }}/adapter/target/debug/sondera-opencode-adapter
-          RUST_LOG: debug
-          RUST_BACKTRACE: full
       - name: Run integration tests
-        run: bun test src/integration.test.ts --timeout 30000
+        run: sudo mkdir -p /var/run/sondera && sudo chown $USER /var/run/sondera && bun test src/integration.test.ts --timeout 30000
         env:
           SONDERA_HARNESS_REPO: /tmp/harness
           SONDERA_ADAPTER_BIN: ${{ github.workspace }}/adapter/target/debug/sondera-opencode-adapter
+          SONDERA_SOCKET: /var/run/sondera/sondera-harness.sock
