@@ -163,6 +163,20 @@ Each line is a JSON object with `ts`, `trajectory_id`, `tool`, `action`, `decisi
 
 The plugin logs a summary of adjudication stats when opencode exits (via `console.log`), including total calls, allow/deny/escalate counts, bypasses, errors, and average latency.
 
+## Custom Policies
+
+The harness server loads Cedar policies from a directory at startup (via `--policy-path`). To use custom policies per project, run a separate harness server instance with a different policy directory and socket path:
+
+```bash
+# Start a per-project harness with custom policies
+sondera-harness-server --policy-path ./my-policies/ --socket /tmp/sondera-project.sock
+
+# Point the adapter at the custom socket
+SONDERA_SOCKET=/tmp/sondera-project.sock opencode
+```
+
+Per-request policy overlays are not supported by the current harness API. The policy set is fixed for the lifetime of the server process.
+
 ## How It Works
 
 ```
