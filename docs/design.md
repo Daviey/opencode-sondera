@@ -11,3 +11,4 @@
 | [Allow Patterns](design/allow-patterns.md) | Regex-based selective bypass |
 | [Audit Log](design/audit-log.md) | JSONL adjudication trail |
 | [Metrics](design/metrics.md) | Per-session counters and latency tracking |
+| [Example Policies](design/example-policies.md) | What the default policies block and how to write custom ones |
