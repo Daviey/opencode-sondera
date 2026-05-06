@@ -172,8 +172,22 @@ async fn stream_mode() -> Result<()> {
     let mut lines = stdin.lines();
     let mut harness_client: Option<HarnessClient> = None;
     let mut stdout = io::BufWriter::new(io::stdout());
+    let mut shutting_down = false;
 
-    while let Some(line) = lines.next_line().await? {
+    loop {
+        let line = tokio::select! {
+            line = lines.next_line() => line?,
+            _ = tokio::signal::ctrl_c() => {
+                if shutting_down {
+                    break;
+                }
+                eprintln!("[sondera] shutting down, waiting for current request...");
+                shutting_down = true;
+                continue;
+            }
+        };
+
+        let Some(line) = line else { break };
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -223,6 +237,10 @@ async fn stream_mode() -> Result<()> {
 
         writeln!(stdout, "{}", serde_json::to_string(&response)?)?;
         stdout.flush()?;
+
+        if shutting_down {
+            break;
+        }
     }
 
     Ok(())
