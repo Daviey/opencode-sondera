@@ -83,9 +83,10 @@ jobs:
           echo "=== Deny request ==="
           echo '{"tool":"bash","action":"ShellCommand","trajectory_id":"diag-deny-2","agent_id":"diag","args":{"command":"rm -rf /"},"cwd":"/tmp"}' | timeout 15 "$ADAPTER_BIN" adjudicate 2>&1
           echo "=== Harness stderr (last 200 lines) ==="
+          tail -200 $HOME/harness-stderr.log || echo "(no stderr captured)"
+          echo "=== Killing harness ==="
           kill $HARNESS_PID 2>/dev/null
-          wait $HARNESS_PID 2>/dev/null
-          tail -200 $HOME/harness-stderr.log
+          wait $HARNESS_PID 2>/dev/null || true
         env:
           ADAPTER_BIN: ${{ github.workspace }}/adapter/target/debug/sondera-opencode-adapter
           RUST_LOG: debug
