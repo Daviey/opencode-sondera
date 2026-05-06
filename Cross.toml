@@ -1,6 +1,8 @@
 [build]
-pre-build = ["apt-get update && apt-get install -y clang"]
+pre-build = [
+  "dpkg --add-architecture $CROSS_DEB_ARCH || true",
+  "apt-get update && apt-get install -y clang libclang-dev",
+]
 
 [target.aarch64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:0.2.5"
-pre-build = ["apt-get update && apt-get install -y clang"]
