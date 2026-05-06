@@ -49,7 +49,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - uses: google/osv-scanner-action@v2.3.5
+      - uses: google/osv-scanner-action@v2.3.3
         with:
           scan-args: |-
             --format=json
