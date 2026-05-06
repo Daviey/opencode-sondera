@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore: ["coverage-badge.json"]
   pull_request:
     branches: [main]
 
@@ -22,20 +23,17 @@ jobs:
           echo "percent=$pct" >> "$GITHUB_OUTPUT"
       - name: Create coverage badge
         if: github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@v1.7.0
-        with:
-          auth: ${{ secrets.COVERAGE_GIST_TOKEN }}
-          gistID: fb485004b27e7a05720052a6e36abcbc
-          filename: coverage.json
-          label: coverage
-          message: ${{ steps.coverage.outputs.percent }}%
-          color: brightgreen
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report
-          path: coverage/
+        run: |
+          pct=$(grep "All files" coverage-output.txt | awk -F'|' '{gsub(/ /, "", $2); print $2}')
+          printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"brightgreen"}\n' "$pct" > coverage-badge.json
+      - name: Commit coverage badge
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add coverage-badge.json
+          git diff --cached --quiet || git commit -m "Update coverage badge [skip ci]"
+          git push
 
   adapter-check:
     runs-on: ubuntu-latest

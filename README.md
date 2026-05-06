@@ -1,7 +1,7 @@
 # opencode-sondera
 
 [![CI](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.github.com/Daviey/fb485004b27e7a05720052a6e36abcbc/raw/coverage.json)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Daviey/opencode-sondera/main/coverage-badge.json)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/badge/codeql-SAST-blue)](https://github.com/Daviey/opencode-sondera/security/code-scanning?tool=CodeQL)
 [![gitleaks](https://img.shields.io/badge/gitleaks-secret%20scan-blue)](https://github.com/Daviey/opencode-sondera/security/secret-scanning)
 [![OSV](https://img.shields.io/badge/osv-vulnerability%20scan-blue)](https://github.com/Daviey/opencode-sondera/actions/workflows/security.yml)
