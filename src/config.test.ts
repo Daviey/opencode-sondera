@@ -1,5 +1,8 @@
-import { describe, expect, it, beforeEach } from "bun:test"
+import { describe, expect, it, beforeEach, afterEach } from "bun:test"
 import { loadConfig, matchesAllowPattern } from "./config"
+import { mkdirSync, rmSync, writeFileSync } from "fs"
+
+const TMP_DIR = "/tmp/sondera-test-config"
 
 describe("loadConfig", () => {
   beforeEach(() => {
@@ -7,6 +10,12 @@ describe("loadConfig", () => {
     delete process.env.SONDERA_DRY_RUN
     delete process.env.SONDERA_ALLOW_PATTERNS
     delete process.env.SONDERA_AUDIT_LOG
+    delete process.env.SONDERA_STRICT
+    try { mkdirSync(TMP_DIR, { recursive: true }) } catch {}
+  })
+
+  afterEach(() => {
+    try { rmSync(TMP_DIR, { recursive: true, force: true }) } catch {}
   })
 
   it("returns defaults", () => {
@@ -65,6 +74,75 @@ describe("loadConfig", () => {
     process.env.SONDERA_ALLOW_PATTERNS = ",,,"
     const config = loadConfig("/tmp")
     expect(config.allowPatterns).toEqual([])
+  })
+
+  it("defaults strictMode to false", () => {
+    const config = loadConfig("/tmp")
+    expect(config.strictMode).toBe(false)
+  })
+
+  it("enables strict mode via SONDERA_STRICT=1", () => {
+    process.env.SONDERA_STRICT = "1"
+    const config = loadConfig("/tmp")
+    expect(config.strictMode).toBe(true)
+  })
+
+  it("loads project config from .opencode/sondera.json", () => {
+    mkdirSync(`${TMP_DIR}/.opencode`, { recursive: true })
+    writeFileSync(
+      `${TMP_DIR}/.opencode/sondera.json`,
+      JSON.stringify({ enabled: false, dryRun: true, allowPatterns: ["git .*"] }),
+    )
+    const config = loadConfig(TMP_DIR)
+    expect(config.enabled).toBe(false)
+    expect(config.dryRun).toBe(true)
+    expect(config.allowPatterns).toHaveLength(1)
+    expect(config.allowPatterns[0].source).toBe("git .*")
+  })
+
+  it("loads project config from sondera.json", () => {
+    writeFileSync(
+      `${TMP_DIR}/sondera.json`,
+      JSON.stringify({ strictMode: true, auditLogPath: "/tmp/audit.jsonl" }),
+    )
+    const config = loadConfig(TMP_DIR)
+    expect(config.strictMode).toBe(true)
+    expect(config.auditLogPath).toBe("/tmp/audit.jsonl")
+  })
+
+  it("prefers .opencode/sondera.json over sondera.json", () => {
+    mkdirSync(`${TMP_DIR}/.opencode`, { recursive: true })
+    writeFileSync(`${TMP_DIR}/.opencode/sondera.json`, JSON.stringify({ enabled: false }))
+    writeFileSync(`${TMP_DIR}/sondera.json`, JSON.stringify({ enabled: true }))
+    const config = loadConfig(TMP_DIR)
+    expect(config.enabled).toBe(false)
+  })
+
+  it("env vars override project config", () => {
+    writeFileSync(
+      `${TMP_DIR}/sondera.json`,
+      JSON.stringify({ enabled: true }),
+    )
+    process.env.SONDERA_ENABLED = "false"
+    const config = loadConfig(TMP_DIR)
+    expect(config.enabled).toBe(false)
+  })
+
+  it("ignores invalid project config files", () => {
+    mkdirSync(`${TMP_DIR}/.opencode`, { recursive: true })
+    writeFileSync(`${TMP_DIR}/.opencode/sondera.json`, "not json")
+    const config = loadConfig(TMP_DIR)
+    expect(config.enabled).toBe(true)
+  })
+
+  it("merges project allow patterns with env allow patterns", () => {
+    writeFileSync(
+      `${TMP_DIR}/sondera.json`,
+      JSON.stringify({ allowPatterns: ["git .*"] }),
+    )
+    process.env.SONDERA_ALLOW_PATTERNS = "echo,ls"
+    const config = loadConfig(TMP_DIR)
+    expect(config.allowPatterns).toHaveLength(3)
   })
 })
 

@@ -33,9 +33,15 @@ async function getClient(): Promise<HarnessClient | null> {
   const c = new HarnessClient()
   const healthy = await c.health()
   if (!healthy) {
-    console.warn(
-      "[sondera] harness server not available — policy enforcement disabled",
-    )
+    if (config!.strictMode) {
+      console.error(
+        "[sondera] strict mode: harness server not available — blocking all tool calls",
+      )
+    } else {
+      console.warn(
+        "[sondera] harness server not available — policy enforcement disabled",
+      )
+    }
     return null
   }
 
@@ -79,6 +85,9 @@ export const SonderaPlugin = async ({
       } catch (err) {
         console.error(new AdjudicationError(err))
         recordError()
+        if (config!.strictMode) {
+          throw new Error("[sondera] strict mode: adjudication failed, blocking by default")
+        }
         return
       }
       const durationMs = performance.now() - start

@@ -47,12 +47,53 @@ interface SonderaConfig {
   dryRun: boolean
   allowPatterns: RegExp[]
   auditLogPath: string | null
+  strictMode: boolean
 }
 
-function loadConfig(): SonderaConfig {
-  const enabled = process.env.SONDERA_ENABLED !== "false"
-  const dryRun = process.env.SONDERA_DRY_RUN === "1" || process.env.SONDERA_DRY_RUN === "true"
-  const auditLogPath = process.env.SONDERA_AUDIT_LOG || null
+interface ProjectConfig {
+  enabled?: boolean
+  dryRun?: boolean
+  allowPatterns?: string[]
+  auditLogPath?: string
+  strictMode?: boolean
+}
+
+function loadProjectConfig(directory: string): ProjectConfig {
+  const candidates = [
+    `${directory}/.opencode/sondera.json`,
+    `${directory}/sondera.json`,
+  ]
+  for (const path of candidates) {
+    try {
+      const { readFileSync } = require("fs")
+      const text = readFileSync(path, "utf-8")
+      if (text.trim().length > 0) return JSON.parse(text) as ProjectConfig
+    } catch {}
+  }
+  return {}
+}
+
+function loadConfig(directory: string): SonderaConfig {
+  const project = loadProjectConfig(directory)
+
+  const enabled = process.env.SONDERA_ENABLED !== undefined
+    ? process.env.SONDERA_ENABLED !== "false"
+    : (project.enabled ?? true)
+  const dryRun = process.env.SONDERA_DRY_RUN !== undefined
+    ? (process.env.SONDERA_DRY_RUN === "1" || process.env.SONDERA_DRY_RUN === "true")
+    : (project.dryRun ?? false)
+  const auditLogPath = process.env.SONDERA_AUDIT_LOG ?? project.auditLogPath ?? null
+  const strictMode = process.env.SONDERA_STRICT !== undefined
+    ? (process.env.SONDERA_STRICT === "1" || process.env.SONDERA_STRICT === "true")
+    : (project.strictMode ?? false)
+
+  const allowPatterns: RegExp[] = []
+  if (project.allowPatterns) {
+    for (const p of project.allowPatterns) {
+      try { allowPatterns.push(new RegExp(p)) }
+      catch { console.error(`[sondera] invalid allow pattern in config: ${p}`) }
+    }
+  }
 
   const raw = process.env.SONDERA_ALLOW_PATTERNS
   const allowPatterns: RegExp[] = []
@@ -65,7 +106,7 @@ function loadConfig(): SonderaConfig {
     }
   }
 
-  return { enabled, dryRun, allowPatterns, auditLogPath }
+  return { enabled, dryRun, allowPatterns, auditLogPath, strictMode }
 }
 
 function matchesAllowPattern(
@@ -445,9 +486,15 @@ async function getClient(): Promise<HarnessClient | null> {
   const c = new HarnessClient()
   const healthy = await c.health()
   if (!healthy) {
-    console.warn(
-      "[sondera] harness server not available — policy enforcement disabled",
-    )
+    if (config!.strictMode) {
+      console.error(
+        "[sondera] strict mode: harness server not available — blocking all tool calls",
+      )
+    } else {
+      console.warn(
+        "[sondera] harness server not available — policy enforcement disabled",
+      )
+    }
     return null
   }
 
@@ -498,7 +545,7 @@ export const SonderaPlugin = async ({
   directory: string
   worktree: string
 }) => {
-  config = loadConfig()
+  config = loadConfig(directory)
 
   return {
     "tool.execute.before": async (input: any, output: any) => {
@@ -528,6 +575,9 @@ export const SonderaPlugin = async ({
       } catch (err) {
         console.error(new AdjudicationError(err))
         recordError()
+        if (config!.strictMode) {
+          throw new Error("[sondera] strict mode: adjudication failed, blocking by default")
+        }
         return
       }
       const durationMs = performance.now() - start

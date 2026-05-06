@@ -1,33 +1,77 @@
+import { readFileSync } from "fs"
+
 export interface SonderaConfig {
   enabled: boolean
   dryRun: boolean
   allowPatterns: RegExp[]
   auditLogPath: string | null
+  strictMode: boolean
+}
+
+interface ProjectConfig {
+  enabled?: boolean
+  dryRun?: boolean
+  allowPatterns?: string[]
+  auditLogPath?: string
+  strictMode?: boolean
 }
 
 export function loadConfig(directory: string): SonderaConfig {
-  const enabled = process.env.SONDERA_ENABLED !== "false"
-  const dryRun = process.env.SONDERA_DRY_RUN === "1" || process.env.SONDERA_DRY_RUN === "true"
-  const allowPatterns = loadAllowPatterns()
-  const auditLogPath = process.env.SONDERA_AUDIT_LOG || null
+  const project = loadProjectConfig(directory)
 
-  return { enabled, dryRun, allowPatterns, auditLogPath }
+  const enabled = process.env.SONDERA_ENABLED !== undefined
+    ? process.env.SONDERA_ENABLED !== "false"
+    : (project.enabled ?? true)
+  const dryRun = process.env.SONDERA_DRY_RUN !== undefined
+    ? (process.env.SONDERA_DRY_RUN === "1" || process.env.SONDERA_DRY_RUN === "true")
+    : (project.dryRun ?? false)
+  const auditLogPath = process.env.SONDERA_AUDIT_LOG ?? project.auditLogPath ?? null
+  const strictMode = process.env.SONDERA_STRICT !== undefined
+    ? (process.env.SONDERA_STRICT === "1" || process.env.SONDERA_STRICT === "true")
+    : (project.strictMode ?? false)
+  const allowPatterns = loadAllowPatterns(project.allowPatterns)
+
+  return { enabled, dryRun, allowPatterns, auditLogPath, strictMode }
 }
 
-function loadAllowPatterns(): RegExp[] {
-  const raw = process.env.SONDERA_ALLOW_PATTERNS
-  if (!raw) return []
+function loadProjectConfig(directory: string): ProjectConfig {
+  const candidates = [
+    `${directory}/.opencode/sondera.json`,
+    `${directory}/sondera.json`,
+  ]
 
-  const patterns: RegExp[] = []
-  for (const part of raw.split(",")) {
-    const trimmed = part.trim()
-    if (trimmed.length === 0) continue
+  for (const path of candidates) {
     try {
-      patterns.push(new RegExp(trimmed))
-    } catch {
-      console.error(`[sondera] invalid allow pattern: ${trimmed}`)
+      const text = readFileSync(path, "utf-8")
+      if (text.trim().length > 0) {
+        return JSON.parse(text) as ProjectConfig
+      }
+    } catch {}
+  }
+
+  return {}
+}
+
+function loadAllowPatterns(projectPatterns?: string[]): RegExp[] {
+  const patterns: RegExp[] = []
+
+  if (projectPatterns) {
+    for (const p of projectPatterns) {
+      try { patterns.push(new RegExp(p)) }
+      catch { console.error(`[sondera] invalid allow pattern in config: ${p}`) }
     }
   }
+
+  const raw = process.env.SONDERA_ALLOW_PATTERNS
+  if (raw) {
+    for (const part of raw.split(",")) {
+      const trimmed = part.trim()
+      if (trimmed.length === 0) continue
+      try { patterns.push(new RegExp(trimmed)) }
+      catch { console.error(`[sondera] invalid allow pattern: ${trimmed}`) }
+    }
+  }
+
   return patterns
 }
 
