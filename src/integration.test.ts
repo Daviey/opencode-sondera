@@ -44,7 +44,7 @@ async function readAll(stream: ReadableStream<Uint8Array> | number | null): Prom
   return chunks.join("")
 }
 
-function adjudicate(request: object, timeoutMs = 15000): Promise<{ decision: string; annotations: Array<{ policy_id: string; description: string }> }> {
+function adjudicate(request: object, timeoutMs = 15000): Promise<{ decision: string; reason?: string; annotations: Array<{ policy_id: string; description: string }> }> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("adjudicate timed out after " + timeoutMs + "ms")), timeoutMs)
     const input = JSON.stringify(request) + "\n"
@@ -52,7 +52,7 @@ function adjudicate(request: object, timeoutMs = 15000): Promise<{ decision: str
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, RUST_LOG: "warn" },
+      env: { ...process.env, RUST_LOG: "info" },
     })
     proc.stdin.write(input)
     proc.stdin.end()
@@ -62,8 +62,13 @@ function adjudicate(request: object, timeoutMs = 15000): Promise<{ decision: str
       readAll(proc.stderr),
     ]).then(([code, stdout, stderr]) => {
       clearTimeout(timer)
+      if (stderr.trim()) console.error("[adapter stderr]", stderr.trim())
       if (code !== 0) return reject(new Error("adapter exited " + code + ": " + stderr))
-      try { resolve(JSON.parse(stdout.trim())) }
+      try {
+        const parsed = JSON.parse(stdout.trim())
+        console.log("[adapter response]", JSON.stringify(parsed))
+        resolve(parsed)
+      }
       catch { reject(new Error("invalid JSON: " + stdout + " stderr: " + stderr)) }
     }).catch(err => { clearTimeout(timer); reject(err) })
   })
