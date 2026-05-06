@@ -68,7 +68,7 @@ jobs:
       - name: "Diagnostic - test adapter against harness"
         run: |
           rm -rf ~/.sondera && mkdir -p ~/.sondera
-          /tmp/harness/target/debug/sondera-harness-server --policy-path /tmp/harness/policies --verbose > /dev/null 2>$HOME/harness-stderr.log &
+          /tmp/harness/target/debug/sondera-harness-server --policy-path /tmp/harness/policies --verbose &> $HOME/harness-output.log &
           HARNESS_PID=$!
           for i in $(seq 1 30); do
             [ -S ~/.sondera/sondera-harness.sock ] && break
@@ -83,7 +83,7 @@ jobs:
           echo "=== Deny request ==="
           echo '{"tool":"bash","action":"ShellCommand","trajectory_id":"diag-deny-2","agent_id":"diag","args":{"command":"rm -rf /"},"cwd":"/tmp"}' | timeout 15 "$ADAPTER_BIN" adjudicate 2>&1
           echo "=== Harness stderr (last 200 lines) ==="
-          tail -200 $HOME/harness-stderr.log || echo "(no stderr captured)"
+          tail -200 $HOME/harness-output.log || echo "(no output captured)"
           echo "=== Killing harness ==="
           kill $HARNESS_PID 2>/dev/null
           wait $HARNESS_PID 2>/dev/null || true
