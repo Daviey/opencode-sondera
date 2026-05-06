@@ -21,6 +21,22 @@ jobs:
       - run: npm ci || npm install
       - run: npm publish --provenance --access public
 
+  publish-github:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: https://npm.pkg.github.com
+      - run: npm ci || npm install
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-adapter:
     strategy:
       matrix:
@@ -64,7 +80,7 @@ jobs:
           if-no-files-found: error
 
   github-release:
-    needs: [publish-npm, build-adapter]
+    needs: [publish-npm, publish-github, build-adapter]
     runs-on: ubuntu-latest
     permissions:
       contents: write
