@@ -41,7 +41,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  osv-scanner:
+  osv-scanner-scheduled:
     runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
@@ -49,12 +49,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - uses: google/osv-scanner-action@v2.3.3
+      - name: Run OSV scanner
+        uses: google/osv-scanner-action/run@v2.3.3
         with:
           scan-args: |-
             --format=json
             ./
-            ./adapter/Cargo.lock
 
   cargo-audit:
     runs-on: ubuntu-latest
