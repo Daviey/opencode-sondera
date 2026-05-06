@@ -1,4 +1,18 @@
-interface AdapterRequest {
+// Auto-generated from src/ — do not edit directly.
+// Run: bun scripts/sync-bundle.ts
+
+// --- src/types.ts ---
+export interface ToolInput {
+  tool: string
+  sessionId?: string
+}
+
+export interface ToolOutput {
+  args: Record<string, unknown>
+  result?: unknown
+}
+
+export interface AdapterRequest {
   trajectory_id: string
   agent_id: string
   tool: string
@@ -8,7 +22,7 @@ interface AdapterRequest {
   event_type: "before" | "after"
 }
 
-interface AdjudicationResponse {
+export interface AdjudicationResponse {
   decision: "allow" | "deny" | "escalate"
   reason?: string
   annotations?: Array<{
@@ -18,8 +32,16 @@ interface AdjudicationResponse {
   }>
 }
 
-class PolicyDenyError extends Error {
-  readonly decision: "deny" = "deny"
+export interface PluginContext {
+  project: { path: string }
+  client: unknown
+  $: unknown
+  directory: string
+  worktree: string
+}
+
+export class PolicyDenyError extends Error {
+  readonly decision: "deny"
   readonly reason: string
   readonly annotations?: AdjudicationResponse["annotations"]
 
@@ -27,12 +49,20 @@ class PolicyDenyError extends Error {
     const reason = response.reason || "action denied by policy"
     super(`[sondera] ${reason}`)
     this.name = "PolicyDenyError"
+    this.decision = "deny"
     this.reason = reason
     this.annotations = response.annotations
   }
 }
 
-class AdjudicationError extends Error {
+export class HarnessUnavailableError extends Error {
+  constructor(message: string) {
+    super(`[sondera] ${message}`)
+    this.name = "HarnessUnavailableError"
+  }
+}
+
+export class AdjudicationError extends Error {
   readonly cause: unknown
 
   constructor(cause: unknown) {
@@ -42,7 +72,10 @@ class AdjudicationError extends Error {
   }
 }
 
-interface SonderaConfig {
+// --- src/config.ts ---
+import { readFileSync } from "fs"
+
+export interface SonderaConfig {
   enabled: boolean
   dryRun: boolean
   allowPatterns: RegExp[]
@@ -58,22 +91,7 @@ interface ProjectConfig {
   strictMode?: boolean
 }
 
-function loadProjectConfig(directory: string): ProjectConfig {
-  const candidates = [
-    `${directory}/.opencode/sondera.json`,
-    `${directory}/sondera.json`,
-  ]
-  for (const path of candidates) {
-    try {
-      const { readFileSync } = require("fs")
-      const text = readFileSync(path, "utf-8")
-      if (text.trim().length > 0) return JSON.parse(text) as ProjectConfig
-    } catch {}
-  }
-  return {}
-}
-
-function loadConfig(directory: string): SonderaConfig {
+export function loadConfig(directory: string): SonderaConfig {
   const project = loadProjectConfig(directory)
 
   const enabled = process.env.SONDERA_ENABLED !== undefined
@@ -86,11 +104,35 @@ function loadConfig(directory: string): SonderaConfig {
   const strictMode = process.env.SONDERA_STRICT !== undefined
     ? (process.env.SONDERA_STRICT === "1" || process.env.SONDERA_STRICT === "true")
     : (project.strictMode ?? false)
+  const allowPatterns = loadAllowPatterns(project.allowPatterns)
 
-  const allowPatterns: RegExp[] = []
-  if (project.allowPatterns) {
-    for (const p of project.allowPatterns) {
-      try { allowPatterns.push(new RegExp(p)) }
+  return { enabled, dryRun, allowPatterns, auditLogPath, strictMode }
+}
+
+function loadProjectConfig(directory: string): ProjectConfig {
+  const candidates = [
+    `${directory}/.opencode/sondera.json`,
+    `${directory}/sondera.json`,
+  ]
+
+  for (const path of candidates) {
+    try {
+      const text = readFileSync(path, "utf-8")
+      if (text.trim().length > 0) {
+        return JSON.parse(text) as ProjectConfig
+      }
+    } catch {}
+  }
+
+  return {}
+}
+
+function loadAllowPatterns(projectPatterns?: string[]): RegExp[] {
+  const patterns: RegExp[] = []
+
+  if (projectPatterns) {
+    for (const p of projectPatterns) {
+      try { patterns.push(new RegExp(p)) }
       catch { console.error(`[sondera] invalid allow pattern in config: ${p}`) }
     }
   }
@@ -100,15 +142,15 @@ function loadConfig(directory: string): SonderaConfig {
     for (const part of raw.split(",")) {
       const trimmed = part.trim()
       if (trimmed.length === 0) continue
-      try { allowPatterns.push(new RegExp(trimmed)) }
+      try { patterns.push(new RegExp(trimmed)) }
       catch { console.error(`[sondera] invalid allow pattern: ${trimmed}`) }
     }
   }
 
-  return { enabled, dryRun, allowPatterns, auditLogPath, strictMode }
+  return patterns
 }
 
-function matchesAllowPattern(
+export function matchesAllowPattern(
   tool: string,
   args: Record<string, unknown>,
   patterns: RegExp[],
@@ -128,6 +170,150 @@ function matchesAllowPattern(
   return patterns.some((p) => p.test(haystack))
 }
 
+// --- src/audit.ts ---
+export interface AuditEntry {
+  ts: string
+  trajectory_id: string
+  tool: string
+  action: string
+  decision: string
+  reason?: string
+  dry_run: boolean
+  duration_ms: number
+}
+
+let logStream: ReturnType<typeof Bun.file> | null = null
+let logWriter: any = null
+
+export function initAuditLog(config: SonderaConfig) {
+  if (!config.auditLogPath) return
+  try {
+    logStream = Bun.file(config.auditLogPath)
+    logWriter = logStream.writer()
+  } catch (err) {
+    console.error(`[sondera] failed to open audit log: ${config.auditLogPath}`, err)
+  }
+}
+
+export function writeAudit(
+  event: AdapterRequest,
+  result: AdjudicationResponse,
+  dryRun: boolean,
+  durationMs: number,
+) {
+  if (!logWriter) return
+
+  const entry: AuditEntry = {
+    ts: new Date().toISOString(),
+    trajectory_id: event.trajectory_id,
+    tool: event.tool,
+    action: event.action,
+    decision: result.decision,
+    reason: result.reason,
+    dry_run: dryRun,
+    duration_ms: Math.round(durationMs * 100) / 100,
+  }
+
+  try {
+    logWriter.write(JSON.stringify(entry) + "\n")
+    logWriter.flush()
+  } catch {}
+}
+
+export function closeAuditLog() {
+  if (logWriter) {
+    try { logWriter.end() } catch {}
+    logWriter = null
+    logStream = null
+  }
+}
+
+// --- src/metrics.ts ---
+export interface Metrics {
+  total: number
+  allowed: number
+  denied: number
+  escalated: number
+  dryRunDenies: number
+  bypassed: number
+  errors: number
+  totalDurationMs: number
+}
+
+let metrics: Metrics = createEmpty()
+
+function createEmpty(): Metrics {
+  return {
+    total: 0,
+    allowed: 0,
+    denied: 0,
+    escalated: 0,
+    dryRunDenies: 0,
+    bypassed: 0,
+    errors: 0,
+    totalDurationMs: 0,
+  }
+}
+
+export function recordAllow(durationMs: number) {
+  metrics.total++
+  metrics.allowed++
+  metrics.totalDurationMs += durationMs
+}
+
+export function recordDeny(durationMs: number) {
+  metrics.total++
+  metrics.denied++
+  metrics.totalDurationMs += durationMs
+}
+
+export function recordEscalate(durationMs: number) {
+  metrics.total++
+  metrics.escalated++
+  metrics.totalDurationMs += durationMs
+}
+
+export function recordDryRunDeny(durationMs: number) {
+  metrics.total++
+  metrics.dryRunDenies++
+  metrics.totalDurationMs += durationMs
+}
+
+export function recordBypass() {
+  metrics.total++
+  metrics.bypassed++
+}
+
+export function recordError() {
+  metrics.total++
+  metrics.errors++
+}
+
+export function getMetrics(): Metrics {
+  return { ...metrics }
+}
+
+export function resetMetrics() {
+  metrics = createEmpty()
+}
+
+export function logSummary() {
+  if (metrics.total === 0) return
+
+  const avgMs = metrics.total > 0
+    ? Math.round((metrics.totalDurationMs / metrics.total) * 100) / 100
+    : 0
+
+  console.log(
+    `[sondera] session stats: ${metrics.total} calls, ` +
+    `${metrics.allowed} allowed, ${metrics.denied} denied, ` +
+    `${metrics.escalated} escalated, ${metrics.dryRunDenies} dry-run denies, ` +
+    `${metrics.bypassed} bypassed, ${metrics.errors} errors, ` +
+    `avg ${avgMs}ms`,
+  )
+}
+
+// --- src/normalize.ts ---
 const TOOL_ACTION_MAP: Record<string, string> = {
   bash: "ShellCommand",
   read: "FileRead",
@@ -145,7 +331,7 @@ const TOOL_ACTION_MAP: Record<string, string> = {
   lsp: "LspQuery",
 }
 
-function normalizeEvent(
+export function normalizeEvent(
   tool: string,
   args: Record<string, unknown>,
   cwd: string | undefined,
@@ -169,7 +355,7 @@ function str(val: unknown): string | undefined {
   return undefined
 }
 
-function toolArgs(
+export function toolArgs(
   tool: string,
   args: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -221,6 +407,7 @@ function toolArgs(
   }
 }
 
+// --- src/client.ts ---
 class LineReader {
   private reader: ReadableStreamDefaultReader<Uint8Array>
   private decoder = new TextDecoder()
@@ -251,14 +438,16 @@ class LineReader {
   }
 }
 
-class HarnessClient {
+export class HarnessClient {
   private binaryPath: string
   private proc: ReturnType<typeof Bun.spawn> | null = null
   private lineReader: LineReader | null = null
   private useStream: boolean | null = null
   private chain: Promise<void> = Promise.resolve()
+  private forceOneshot: boolean
 
-  constructor(binaryPath?: string) {
+  constructor(binaryPath?: string, forceOneshot = false) {
+    this.forceOneshot = forceOneshot
     const envPath = process.env.SONDERA_ADAPTER_PATH
     if (envPath) {
       this.binaryPath = envPath
@@ -287,7 +476,7 @@ class HarnessClient {
   }
 
   private async _adjudicate(event: AdapterRequest): Promise<AdjudicationResponse> {
-    if (this.useStream === false) {
+    if (this.useStream === false || this.forceOneshot) {
       return this.oneshotAdjudicate(event)
     }
 
@@ -390,89 +579,18 @@ class HarnessClient {
   }
 }
 
-interface AuditEntry {
-  ts: string
-  trajectory_id: string
-  tool: string
-  action: string
-  decision: string
-  reason?: string
-  dry_run: boolean
-  duration_ms: number
-}
-
-let logWriter: any = null
-
-function initAuditLog(config: SonderaConfig) {
-  if (!config.auditLogPath) return
-  try {
-    const f = Bun.file(config.auditLogPath)
-    logWriter = f.writer()
-  } catch (err) {
-    console.error(`[sondera] failed to open audit log: ${config.auditLogPath}`, err)
-  }
-}
-
-function writeAudit(
-  event: AdapterRequest,
-  result: AdjudicationResponse,
-  dryRun: boolean,
-  durationMs: number,
-) {
-  if (!logWriter) return
-  const entry: AuditEntry = {
-    ts: new Date().toISOString(),
-    trajectory_id: event.trajectory_id,
-    tool: event.tool,
-    action: event.action,
-    decision: result.decision,
-    reason: result.reason,
-    dry_run: dryRun,
-    duration_ms: Math.round(durationMs * 100) / 100,
-  }
-  try {
-    logWriter.write(JSON.stringify(entry) + "\n")
-    logWriter.flush()
-  } catch {}
-}
-
-interface Metrics {
-  total: number
-  allowed: number
-  denied: number
-  escalated: number
-  dryRunDenies: number
-  bypassed: number
-  errors: number
-  totalDurationMs: number
-}
-
-let metrics: Metrics = {
-  total: 0, allowed: 0, denied: 0, escalated: 0,
-  dryRunDenies: 0, bypassed: 0, errors: 0, totalDurationMs: 0,
-}
-
-function recordAllow(d: number) { metrics.total++; metrics.allowed++; metrics.totalDurationMs += d }
-function recordDeny(d: number) { metrics.total++; metrics.denied++; metrics.totalDurationMs += d }
-function recordEscalate(d: number) { metrics.total++; metrics.escalated++; metrics.totalDurationMs += d }
-function recordDryRunDeny(d: number) { metrics.total++; metrics.dryRunDenies++; metrics.totalDurationMs += d }
-function recordBypass() { metrics.total++; metrics.bypassed++ }
-function recordError() { metrics.total++; metrics.errors++ }
-
-function logSummary() {
-  if (metrics.total === 0) return
-  const avg = Math.round((metrics.totalDurationMs / metrics.total) * 100) / 100
-  console.log(
-    `[sondera] session stats: ${metrics.total} calls, ` +
-    `${metrics.allowed} allowed, ${metrics.denied} denied, ` +
-    `${metrics.escalated} escalated, ${metrics.dryRunDenies} dry-run denies, ` +
-    `${metrics.bypassed} bypassed, ${metrics.errors} errors, avg ${avg}ms`,
-  )
-}
-
+// --- src/index.ts ---
 let client: HarnessClient | null = null
 let initialized = false
-let config: SonderaConfig | null = null
+let config: ReturnType<typeof loadConfig> | null = null
+
+export function _reset() {
+  client = null
+  initialized = false
+  config = null
+  resetMetrics()
+  closeAuditLog()
+}
 
 async function getClient(): Promise<HarnessClient | null> {
   if (initialized) return client
@@ -504,46 +622,9 @@ async function getClient(): Promise<HarnessClient | null> {
 
 const SONDERA_AGENT_ID = `opencode-${process.env.USER || "unknown"}`
 
-function formatPolicyContext(result: {
-  annotations?: Array<{
-    policy_id?: string
-    description?: string
-    annotations?: Record<string, string>
-  }>
-}): string | null {
-  if (!result.annotations || result.annotations.length === 0) return null
-
-  const parts = result.annotations
-    .map((a) => {
-      const lines: string[] = []
-      if (a.policy_id && a.description) {
-        lines.push(`[Policy: ${a.policy_id}] ${a.description}`)
-      } else if (a.policy_id) {
-        lines.push(`[Policy: ${a.policy_id}]`)
-      } else if (a.description) {
-        lines.push(a.description)
-      }
-      if (a.annotations) {
-        for (const [key, value] of Object.entries(a.annotations)) {
-          lines.push(`  ${key}: ${value}`)
-        }
-      }
-      return lines.join("\n")
-    })
-    .filter((s) => s.length > 0)
-
-  return parts.length > 0 ? parts.join("\n") : null
-}
-
 export const SonderaPlugin = async ({
   directory,
-}: {
-  project: { path: string }
-  client: unknown
-  $: unknown
-  directory: string
-  worktree: string
-}) => {
+}: PluginContext) => {
   config = loadConfig(directory)
 
   return {
@@ -629,3 +710,35 @@ export const SonderaPlugin = async ({
     },
   }
 }
+
+function formatPolicyContext(result: {
+  annotations?: Array<{
+    policy_id?: string
+    description?: string
+    annotations?: Record<string, string>
+  }>
+}): string | null {
+  if (!result.annotations || result.annotations.length === 0) return null
+
+  const parts = result.annotations
+    .map((a) => {
+      const lines: string[] = []
+      if (a.policy_id && a.description) {
+        lines.push(`[Policy: ${a.policy_id}] ${a.description}`)
+      } else if (a.policy_id) {
+        lines.push(`[Policy: ${a.policy_id}]`)
+      } else if (a.description) {
+        lines.push(a.description)
+      }
+      if (a.annotations) {
+        for (const [key, value] of Object.entries(a.annotations)) {
+          lines.push(`  ${key}: ${value}`)
+        }
+      }
+      return lines.join("\n")
+    })
+    .filter((s) => s.length > 0)
+
+  return parts.length > 0 ? parts.join("\n") : null
+}
+

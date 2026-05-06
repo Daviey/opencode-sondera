@@ -11,7 +11,13 @@
   },
   "files": [
     "sondera-bundled.ts",
-    "src/*.ts",
+    "src/index.ts",
+    "src/client.ts",
+    "src/normalize.ts",
+    "src/types.ts",
+    "src/config.ts",
+    "src/audit.ts",
+    "src/metrics.ts",
     "adapter/src/main.rs",
     "adapter/Cargo.toml",
     "README.md",
@@ -20,7 +26,8 @@
   "scripts": {
     "build:adapter": "cd adapter && cargo build --release",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "sync-bundle": "bun scripts/sync-bundle.ts"
   },
   "keywords": ["opencode", "sondera", "cedar", "policy", "security", "ai-safety"],
   "license": "Apache-2.0",
@@ -30,7 +37,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Daviey/opencode-sondera"
+    "url": "git+https://github.com/Daviey/opencode-sondera.git"
   },
   "homepage": "https://github.com/Daviey/opencode-sondera",
   "bugs": {
