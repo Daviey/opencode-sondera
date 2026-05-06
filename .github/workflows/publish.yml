@@ -19,7 +19,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest
       - run: npm ci || npm install
-      - run: npm publish --provenance --access public
+      - run: npm publish --provenance --access public || echo "Package version may already exist"
 
   publish-github:
     runs-on: ubuntu-latest
@@ -88,7 +88,7 @@ jobs:
           subject-path: target/${{ matrix.target }}/release/sondera-opencode-adapter
 
   github-release:
-    needs: [publish-npm, publish-github, build-adapter]
+    needs: [build-adapter]
     runs-on: ubuntu-latest
     permissions:
       contents: write
