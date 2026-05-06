@@ -69,10 +69,14 @@ jobs:
       - name: Install cross
         if: matrix.use-cross
         run: cargo install cross --locked
+      - name: Install clang for cross-compilation
+        if: matrix.use-cross
+        run: sudo apt-get update && sudo apt-get install -y clang
       - name: Build adapter (cross)
         if: matrix.use-cross
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: true
+          CROSS_CONFIG: ${{ github.workspace }}/Cross.toml
         run: cross build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
       - name: Build adapter (native)
         if: ${{ !matrix.use-cross }}
