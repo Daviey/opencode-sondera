@@ -88,6 +88,12 @@ cp src/*.ts .opencode/plugins/sondera/
 
 **Option C: npm package**
 
+```bash
+npm install opencode-sondera
+```
+
+Then reference it in your opencode config:
+
 ```json
 // opencode.json
 {

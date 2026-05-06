@@ -1,16 +1,38 @@
 {
   "name": "opencode-sondera",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Sondera Cedar policy enforcement plugin for opencode",
-  "main": "src/index.ts",
+  "main": "sondera-bundled.ts",
   "types": "src/index.ts",
+  "exports": {
+    ".": "./sondera-bundled.ts",
+    "./plugin": "./sondera-bundled.ts",
+    "./src/*": "./src/*.ts"
+  },
+  "files": [
+    "sondera-bundled.ts",
+    "src/*.ts",
+    "adapter/src/main.rs",
+    "adapter/Cargo.toml",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build:adapter": "cd adapter && cargo build --release",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "prepublishOnly": "bun test && tsc --noEmit"
   },
-  "keywords": ["opencode", "sondera", "cedar", "policy", "security"],
+  "keywords": ["opencode", "sondera", "cedar", "policy", "security", "ai-safety"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sondera-ai/opencode-sondera"
+  },
+  "homepage": "https://github.com/sondera-ai/opencode-sondera",
+  "bugs": {
+    "url": "https://github.com/sondera-ai/opencode-sondera/issues"
+  },
   "peerDependencies": {
     "@opencode-ai/plugin": "*"
   },
