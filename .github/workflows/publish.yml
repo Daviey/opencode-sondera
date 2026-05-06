@@ -48,10 +48,14 @@ jobs:
         run: cargo install cross --locked
       - name: Build adapter (cross)
         if: matrix.use-cross
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: true
         run: cross build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
       - name: Build adapter (native)
         if: ${{ !matrix.use-cross }}
-        run: cargo build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
