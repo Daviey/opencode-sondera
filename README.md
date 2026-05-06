@@ -1,5 +1,10 @@
 # opencode-sondera
 
+[![CI](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml/badge.svg)](https://github.com/Daviey/opencode-sondera/actions/workflows/ci.yml)
+[![CodeQL](https://img.shields.io/badge/codeql-SAST-blue)](https://github.com/Daviey/opencode-sondera/security/code-scanning?tool=CodeQL)
+[![gitleaks](https://img.shields.io/badge/gitleaks-secret%20scan-blue)](https://github.com/Daviey/opencode-sondera/security/secret-scanning)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 [Sondera](https://github.com/sondera-ai/sondera-coding-agent-hooks) Cedar policy enforcement for [opencode](https://opencode.ai).
 
 This plugin intercepts every tool call (shell commands, file reads/writes, web fetches, etc.) and sends it to the Sondera harness server for Cedar policy adjudication. Denials block execution; escalations log a warning.
