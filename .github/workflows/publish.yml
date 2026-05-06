@@ -12,8 +12,8 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: https://registry.npmjs.org
@@ -27,8 +27,8 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: https://npm.pkg.github.com
@@ -59,7 +59,7 @@ jobs:
       attestation-write: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -77,13 +77,13 @@ jobs:
           rustup target add ${{ matrix.target }}
           cargo build --release --manifest-path adapter/Cargo.toml --target ${{ matrix.target }}
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sondera-opencode-adapter-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/sondera-opencode-adapter
           if-no-files-found: error
       - name: Attest binary
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: target/${{ matrix.target }}/release/sondera-opencode-adapter
 
@@ -93,8 +93,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: false
@@ -107,7 +107,7 @@ jobs:
             chmod +x "release-assets/sondera-opencode-adapter-${target}"
           done
           ls -la release-assets/
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
