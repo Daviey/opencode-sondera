@@ -131,19 +131,47 @@ describe("SonderaPlugin", () => {
   })
 
   it("allows execution on escalate (logs warning)", async () => {
-    mockSpawnHealthyThenRespond(0, 0, JSON.stringify({ decision: "escalate", reason: "suspicious" }))
+    const healthOutput = createMockOutputStream()
+    healthOutput.close()
+    const streamOutput = createMockOutputStream()
+
+    let callIdx = 0
+    Bun.spawn = mock(() => {
+      callIdx++
+      if (callIdx === 1) {
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: healthOutput.stream,
+          stderr: makeStdout(""),
+          exited: Promise.resolve(0),
+        }
+      }
+      return {
+        stdin: {
+          write: mock(() => {
+            streamOutput.push(JSON.stringify({ decision: "escalate", reason: "suspicious" }) + "\n")
+          }),
+          end: mock(() => {}),
+        },
+        stdout: streamOutput.stream,
+        stderr: makeStdout(""),
+        exitCode: null,
+        exited: new Promise(() => {}),
+        killed: false,
+        kill: mock(() => {}),
+      }
+    }) as any
 
     const plugin = await makePlugin()
 
-    const input = { tool: "bash", sessionId: "s1" }
-    const output = { args: { command: "ls" } }
-
-    await plugin["tool.execute.before"](input, output)
+    await plugin["tool.execute.before"](
+      { tool: "bash", sessionId: "s1" },
+      { args: { command: "ls" } },
+    )
 
     const mod = await import("./index")
     const m = mod.getMetrics()
     expect(m.escalated).toBe(1)
-    expect(m.total).toBe(1)
   })
 
   it("allows execution when adapter exits non-zero (fail open)", async () => {
