@@ -220,6 +220,40 @@ describe("HarnessClient (oneshot mode)", () => {
       const call = calls[0]?.[0] ?? {}
       expect(call.cmd).toEqual(["/custom/adapter-bin", "adjudicate"])
     })
+
+    it("returns allow on oneshot timeout", async () => {
+      let resolveExited: (code: number) => void
+      const exitedPromise = new Promise<number>((r) => { resolveExited = r })
+      const mockSpawn = mock(() => {
+        setTimeout(() => resolveExited(0), 500)
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: new ReadableStream({ start(c) {} }),
+          stderr: new ReadableStream({ start(c) {} }),
+          exited: exitedPromise,
+          killed: false,
+          kill: mock(() => {}),
+        }
+      }) as any
+      Bun.spawn = mockSpawn
+
+      const c = new HarnessClient("/bin/adapter", true, 50)
+      const result = await c.adjudicate({
+        trajectory_id: "t1",
+        agent_id: "a1",
+        tool: "bash",
+        action: "ShellCommand",
+        args: {},
+        event_type: "before",
+      })
+
+      expect(result.decision).toBe("allow")
+    })
+
+    it("passes timeoutMs to constructor", () => {
+      const c = new HarnessClient("/bin/adapter", true, 3000)
+      expect((c as any).timeoutMs).toBe(3000)
+    })
   })
 
   describe("health", () => {
@@ -498,5 +532,31 @@ describe("HarnessClient (stream mode)", () => {
     expect(r2.decision).toBe("allow")
     expect(r3.decision).toBe("allow")
     expect(order).toEqual(["1", "2", "3"])
+  })
+
+  it("returns allow on stream timeout", async () => {
+    const output = createMockOutputStream()
+    const mockProc = {
+      stdin: {
+        write: mock((data: string) => {}),
+        end: mock(() => {}),
+      },
+      stdout: output.stream,
+      stderr: new ReadableStream({ start(c) { c.close() } }),
+      exitCode: null as number | null,
+      exited: new Promise(() => {}),
+      killed: false,
+      kill: mock(() => {}),
+    }
+
+    Bun.spawn = mock(() => mockProc) as any
+
+    const c = new HarnessClient("/bin/adapter", false, 50)
+    const result = await c.adjudicate({
+      trajectory_id: "t1", agent_id: "a1", tool: "bash",
+      action: "ShellCommand", args: { command: "ls" }, event_type: "before",
+    })
+
+    expect(result.decision).toBe("allow")
   })
 })
