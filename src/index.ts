@@ -14,11 +14,16 @@ import {
 let client: HarnessClient | null = null
 let initialized = false
 let config: ReturnType<typeof loadConfig> | null = null
+let harnessProc: ReturnType<typeof Bun.spawn> | null = null
 
 export function _reset() {
   client = null
   initialized = false
   config = null
+  if (harnessProc) {
+    try { if (!(harnessProc as any).killed) (harnessProc as any).kill() } catch {}
+    harnessProc = null
+  }
   resetMetrics()
   closeAuditLog()
   resetToast()
@@ -33,7 +38,13 @@ async function getClient(): Promise<HarnessClient | null> {
   }
 
   const c = new HarnessClient()
-  const healthy = await c.health()
+  let healthy = await c.health()
+  if (!healthy && config!.harnessPath) {
+    const spawned = spawnHarnessServer()
+    if (spawned) {
+      healthy = await waitForHarness(10, 500)
+    }
+  }
   if (!healthy) {
     if (config!.strictMode) {
       sendToast({
@@ -59,6 +70,38 @@ async function getClient(): Promise<HarnessClient | null> {
 }
 
 const SONDERA_AGENT_ID = `opencode-${process.env.USER || "unknown"}`
+
+function spawnHarnessServer(): boolean {
+  if (!config!.harnessPath) return false
+
+  const args: string[] = []
+  if (config!.policiesPath) {
+    args.push("--policy-path", config!.policiesPath)
+  }
+
+  try {
+    harnessProc = Bun.spawn({
+      cmd: [config!.harnessPath, ...args],
+      stderr: "pipe",
+      stdout: "pipe",
+    })
+    console.error(`[sondera] spawned harness server (pid ${harnessProc.pid})`)
+    return true
+  } catch (err) {
+    console.error(`[sondera] failed to spawn harness server:`, err)
+    return false
+  }
+}
+
+async function waitForHarness(retries: number, delayMs: number): Promise<boolean> {
+  for (let i = 0; i < retries; i++) {
+    await new Promise((r) => setTimeout(r, delayMs))
+    const c = new HarnessClient()
+    const healthy = await c.health()
+    if (healthy) return true
+  }
+  return false
+}
 
 export const SonderaPlugin = async ({
   directory,

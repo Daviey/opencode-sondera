@@ -225,3 +225,77 @@ when {
     context.path like "*aws/credentials*"
 };
 ```
+
+## End-to-End Deny Test
+
+Testing that Sondera blocks a command through opencode is tricky because the LLM often refuses to run destructive commands before they reach the tool layer. The way around this is to add a temporary policy that denies a harmless command the LLM has no reason to refuse.
+
+### Step 1: create a test policy
+
+Save this as `policies/900-test-deny.cedar` in the harness repo:
+
+```cedar
+@id("forbid-sondera-test-deny")
+@description("Test policy: denies echo sondera-deny-test for E2E validation")
+forbid (
+    principal,
+    action == Action::"ShellCommand",
+    resource
+) when {
+    context.command like "*sondera-deny-test*"
+};
+```
+
+### Step 2: restart the harness with the new policy
+
+```bash
+# stop the existing harness
+rm -f ~/.sondera/sondera-harness.sock
+
+# start from the harness repo root (needs the policies/ directory)
+cd /path/to/sondera-coding-agent-hooks
+./target/debug/sondera-harness-server --socket ~/.sondera/sondera-harness.sock --verbose
+```
+
+The harness loads all `.cedar` files from `policies/` on startup.
+
+### Step 3: verify deny via the adapter
+
+```bash
+echo '{"tool":"bash","action":"ShellCommand","trajectory_id":"test1","agent_id":"test","args":{"command":"echo sondera-deny-test"},"cwd":"/tmp"}' \
+  | sondera-opencode-adapter adjudicate
+```
+
+Expected output:
+
+```json
+{"decision":"deny","annotations":[{"policy_id":"forbid-sondera-test-deny","description":"Test policy: denies echo sondera-deny-test for E2E validation"}]}
+```
+
+### Step 4: verify deny through opencode
+
+```bash
+opencode run "run this bash command: echo sondera-deny-test"
+```
+
+Expected output:
+
+```
+bash failed
+Error: [sondera] action denied by policy
+```
+
+The command never executed. Sondera intercepted the tool call, evaluated the Cedar policy, and blocked it. The LLM sees the error and reports it back.
+
+### Step 5: clean up
+
+```bash
+rm policies/900-test-deny.cedar
+# restart the harness to reload policies without the test rule
+```
+
+### Why this works
+
+- `echo sondera-deny-test` is harmless. If Sondera fails open (the default), the command runs and prints a string. No risk.
+- The LLM has no reason to refuse `echo` with a test string, so the command reaches the tool layer where Sondera intercepts it.
+- The policy matches on the command string, so no YARA signatures or Ollama classifiers are needed. Works with just Cedar.

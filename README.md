@@ -35,7 +35,7 @@ This plugin is the glue between opencode and the harness. It normalises tool cal
 ## Prerequisites
 
 - [opencode](https://opencode.ai) with plugin support
-- [Sondera harness server](https://github.com/sondera-ai/sondera-coding-agent-hooks) running
+- [Sondera harness server](https://github.com/sondera-ai/sondera-coding-agent-hooks) (can be auto-started, see below)
 
 ## Install
 
@@ -112,11 +112,29 @@ cp target/debug/sondera-opencode-adapter ~/.local/bin/
 
 ### Start the harness server
 
+You can start the harness manually, or let the plugin auto-start it on first tool call.
+
+**Manual start:**
+
 ```bash
 cd ../sondera-coding-agent-hooks
-nix-shell ../opencode/sondera/shell.nix --run \
-  "./target/debug/sondera-harness-server -v"
+./target/debug/sondera-harness-server -v
 ```
+
+**Auto-start (recommended):**
+
+Add `harnessPath` and `policiesPath` to your project config (`.opencode/sondera.json`):
+
+```json
+{
+  "harnessPath": "/path/to/sondera-harness-server",
+  "policiesPath": "/path/to/sondera-coding-agent-hooks/policies"
+}
+```
+
+The plugin checks if the harness is already running. If not, it spawns the server process and waits up to 5 seconds for it to become healthy. If the harness was already running, spawning is skipped.
+
+Environment variable alternatives: `SONDERA_HARNESS_PATH` and `SONDERA_POLICIES_PATH`.
 
 ### Verify the connection
 
@@ -148,6 +166,8 @@ nix build .#sondera-opencode-adapter
 | Environment Variable | Default | Description |
 |---|---|---|
 | `SONDERA_ADAPTER_PATH` | `$HOME/.local/bin/sondera-opencode-adapter` | Path to the adapter binary |
+| `SONDERA_HARNESS_PATH` | (none) | Path to the harness server binary. When set, the plugin auto-starts the harness if it is not already running. |
+| `SONDERA_POLICIES_PATH` | (none) | Path to Cedar policy directory, passed to the harness server via `--policy-path` |
 | `SONDERA_ENABLED` | `true` | Set to `false` to disable |
 | `SONDERA_DRY_RUN` | `false` | Set to `1` or `true` to log denials without blocking |
 | `SONDERA_STRICT` | `false` | Set to `1` or `true` to fail-closed on errors and harness unavailability |
@@ -177,6 +197,8 @@ Create `.opencode/sondera.json` or `sondera.json` in your project root:
   "enabled": true,
   "dryRun": false,
   "strictMode": false,
+  "harnessPath": "/path/to/sondera-harness-server",
+  "policiesPath": "/path/to/sondera-coding-agent-hooks/policies",
   "allowPatterns": ["git status", "git diff", "git log"],
   "auditLogPath": "/tmp/sondera-audit.jsonl"
 }
@@ -216,7 +238,7 @@ Each line is a JSON object with `ts`, `trajectory_id`, `tool`, `action`, `decisi
 
 ### Session Stats
 
-The plugin logs a summary of adjudication stats when opencode exits (via `console.log`), including total calls, allow/deny/escalate counts, bypasses, errors, and average latency.
+The plugin logs a summary of adjudication stats when opencode exits, including total calls, allow/deny/escalate counts, bypasses, errors, and average latency. Output goes to stderr to avoid interfering with the TUI.
 
 ## Custom Policies
 
@@ -293,7 +315,8 @@ Specifically (default/fail-open mode):
 - Adapter returns invalid JSON: allow
 - Stream process crashes: reconnect on next call
 - Old adapter binary without `stream` command: auto-fall back to oneshot
-- Harness server not reachable at startup: plugin disables itself (warns once)
+- Harness server not reachable and auto-start not configured: plugin disables itself (warns once)
+- Harness server not reachable and auto-start configured: plugin spawns the server, waits, then retries
 - Harness returns an error (e.g., Ollama not running): allow
 - Any unhandled exception in the plugin: allow
 
