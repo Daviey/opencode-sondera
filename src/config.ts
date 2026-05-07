@@ -6,6 +6,8 @@ export interface SonderaConfig {
   allowPatterns: RegExp[]
   auditLogPath: string | null
   strictMode: boolean
+  harnessPath: string | null
+  policiesPath: string | null
 }
 
 interface ProjectConfig {
@@ -14,6 +16,8 @@ interface ProjectConfig {
   allowPatterns?: string[]
   auditLogPath?: string
   strictMode?: boolean
+  harnessPath?: string
+  policiesPath?: string
 }
 
 export function loadConfig(directory: string): SonderaConfig {
@@ -29,9 +33,11 @@ export function loadConfig(directory: string): SonderaConfig {
   const strictMode = process.env.SONDERA_STRICT !== undefined
     ? (process.env.SONDERA_STRICT === "1" || process.env.SONDERA_STRICT === "true")
     : (project.strictMode ?? false)
+  const harnessPath = process.env.SONDERA_HARNESS_PATH ?? project.harnessPath ?? null
+  const policiesPath = process.env.SONDERA_POLICIES_PATH ?? project.policiesPath ?? null
   const allowPatterns = loadAllowPatterns(project.allowPatterns)
 
-  return { enabled, dryRun, allowPatterns, auditLogPath, strictMode }
+  return { enabled, dryRun, allowPatterns, auditLogPath, strictMode, harnessPath, policiesPath }
 }
 
 function loadProjectConfig(directory: string): ProjectConfig {

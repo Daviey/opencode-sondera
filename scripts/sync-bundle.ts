@@ -18,6 +18,7 @@ for (const f of files) {
   src = src.replace(/import\s+(type\s+)?\{[^}]*\}\s*from\s*"[.][^"]*"\s*;?\n?/g, "")
   src = src.replace(/import\s+.*\s*from\s*"[.][^"]*"\s*;?\n?/g, "")
   src = src.replace(/export\s+\{[^}]*\}\s*from\s*"[.][^"]*"\s*;?\n?/g, "")
+  src = src.replace(/^export\s+(?!const\s+SonderaPlugin\b)/gm, "")
 
   bundled += `// --- ${f} ---\n${src.trim()}\n\n`
 }

@@ -1,6 +1,6 @@
 {
   "name": "opencode-sondera",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "Sondera Cedar policy enforcement plugin for opencode",
   "main": "sondera-bundled.ts",
   "types": "src/index.ts",

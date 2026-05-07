@@ -70,8 +70,8 @@ describe("metrics", () => {
 
   it("logSummary logs with recorded data", () => {
     const spy = mock(() => {})
-    const orig = console.log
-    console.log = spy as any
+    const orig = console.error
+    console.error = spy as any
     recordAllow(10)
     recordDeny(5)
     logSummary()
@@ -80,6 +80,6 @@ describe("metrics", () => {
     expect(call[0]).toContain("2 calls")
     expect(call[0]).toContain("1 allowed")
     expect(call[0]).toContain("1 denied")
-    console.log = orig
+    console.error = orig
   })
 })

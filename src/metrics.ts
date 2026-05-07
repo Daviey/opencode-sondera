@@ -73,7 +73,7 @@ export function logSummary() {
     ? Math.round((metrics.totalDurationMs / metrics.total) * 100) / 100
     : 0
 
-  console.log(
+  console.error(
     `[sondera] session stats: ${metrics.total} calls, ` +
     `${metrics.allowed} allowed, ${metrics.denied} denied, ` +
     `${metrics.escalated} escalated, ${metrics.dryRunDenies} dry-run denies, ` +
