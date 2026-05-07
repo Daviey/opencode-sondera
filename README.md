@@ -173,6 +173,7 @@ nix build .#sondera-opencode-adapter
 | `SONDERA_STRICT` | `false` | Set to `1` or `true` to fail-closed on errors and harness unavailability |
 | `SONDERA_ALLOW_PATTERNS` | (none) | Comma-separated regex patterns to bypass adjudication |
 | `SONDERA_AUDIT_LOG` | (none) | Path to JSONL file for adjudication audit trail |
+| `SONDERA_ADJUDICATE_TIMEOUT_MS` | `5000` | Milliseconds before adjudication is aborted (fail-open) |
 
 ### Strict Mode
 
@@ -200,7 +201,8 @@ Create `.opencode/sondera.json` or `sondera.json` in your project root:
   "harnessPath": "/path/to/sondera-harness-server",
   "policiesPath": "/path/to/sondera-coding-agent-hooks/policies",
   "allowPatterns": ["git status", "git diff", "git log"],
-  "auditLogPath": "/tmp/sondera-audit.jsonl"
+  "auditLogPath": "/tmp/sondera-audit.jsonl",
+  "adjudicateTimeoutMs": 5000
 }
 ```
 

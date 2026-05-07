@@ -8,6 +8,7 @@ export interface SonderaConfig {
   strictMode: boolean
   harnessPath: string | null
   policiesPath: string | null
+  adjudicateTimeoutMs: number
 }
 
 interface ProjectConfig {
@@ -18,6 +19,7 @@ interface ProjectConfig {
   strictMode?: boolean
   harnessPath?: string
   policiesPath?: string
+  adjudicateTimeoutMs?: number
 }
 
 export function loadConfig(directory: string): SonderaConfig {
@@ -36,8 +38,11 @@ export function loadConfig(directory: string): SonderaConfig {
   const harnessPath = process.env.SONDERA_HARNESS_PATH ?? project.harnessPath ?? null
   const policiesPath = process.env.SONDERA_POLICIES_PATH ?? project.policiesPath ?? null
   const allowPatterns = loadAllowPatterns(project.allowPatterns)
+  const adjudicateTimeoutMs = process.env.SONDERA_ADJUDICATE_TIMEOUT_MS !== undefined
+    ? parseInt(process.env.SONDERA_ADJUDICATE_TIMEOUT_MS, 10)
+    : (project.adjudicateTimeoutMs ?? 5000)
 
-  return { enabled, dryRun, allowPatterns, auditLogPath, strictMode, harnessPath, policiesPath }
+  return { enabled, dryRun, allowPatterns, auditLogPath, strictMode, harnessPath, policiesPath, adjudicateTimeoutMs }
 }
 
 function loadProjectConfig(directory: string): ProjectConfig {

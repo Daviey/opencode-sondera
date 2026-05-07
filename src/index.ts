@@ -37,7 +37,7 @@ async function getClient(): Promise<HarnessClient | null> {
     return null
   }
 
-  const c = new HarnessClient()
+  const c = new HarnessClient(undefined, false, config!.adjudicateTimeoutMs)
   let healthy = await c.health()
   if (!healthy && config!.harnessPath) {
     const spawned = spawnHarnessServer()
@@ -50,14 +50,14 @@ async function getClient(): Promise<HarnessClient | null> {
       sendToast({
         variant: "error",
         title: "Sondera",
-        message: "Strict mode: harness server not available — blocking all tool calls",
+        message: "Strict mode: harness server not available, blocking all tool calls",
         duration: 10_000,
       })
     } else {
       sendToast({
         variant: "warning",
         title: "Sondera",
-        message: "Harness server not available — policy enforcement disabled",
+        message: "Harness server not available, policy enforcement disabled",
         duration: 6_000,
       })
     }
@@ -96,7 +96,7 @@ function spawnHarnessServer(): boolean {
 async function waitForHarness(retries: number, delayMs: number): Promise<boolean> {
   for (let i = 0; i < retries; i++) {
     await new Promise((r) => setTimeout(r, delayMs))
-    const c = new HarnessClient()
+    const c = new HarnessClient(undefined, false, 2000)
     const healthy = await c.health()
     if (healthy) return true
   }
