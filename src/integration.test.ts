@@ -83,9 +83,14 @@ describe("integration: adapter + harness", () => {
     if (!existsSync(ADAPTER_BIN)) throw new Error("adapter binary not found at " + ADAPTER_BIN)
     if (!existsSync(POLICY_PATH)) throw new Error("policy directory not found at " + POLICY_PATH)
 
+    console.log("[integration] copying test deny policy from", TEST_DENY_POLICY, "to", join(POLICY_PATH, "900-test-deny.cedar"))
     if (existsSync(TEST_DENY_POLICY)) {
       const dest = join(POLICY_PATH, "900-test-deny.cedar")
       copyFileSync(TEST_DENY_POLICY, dest)
+      if (!existsSync(dest)) throw new Error("failed to copy test deny policy to " + dest)
+      console.log("[integration] test deny policy copied, size:", require("fs").statSync(dest).size)
+    } else {
+      throw new Error("test deny policy not found at " + TEST_DENY_POLICY)
     }
 
     rmSync(SONDERA_DIR, { recursive: true, force: true })
