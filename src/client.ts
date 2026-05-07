@@ -105,7 +105,7 @@ export class HarnessClient {
   }
 
   private async ensureStreamProcess() {
-    if (this.proc && (this.proc as any).exitCode === null) return
+    if (this.proc && this.proc.exitCode === null) return
 
     this.proc = Bun.spawn({
       cmd: [this.binaryPath, "stream"],
@@ -130,7 +130,7 @@ export class HarnessClient {
   private killStream() {
     if (this.proc) {
       try {
-        if (!(this.proc as any).killed) (this.proc as any).kill()
+        if (!this.proc.killed) this.proc.kill()
       } catch {}
     }
     if (this.lineReader) {
@@ -168,7 +168,7 @@ export class HarnessClient {
       }),
       new Promise<{ decision: "allow" }>((resolve) =>
         setTimeout(() => {
-          try { if (!(proc as any).killed) (proc as any).kill() } catch {}
+          try { if (!proc.killed) proc.kill() } catch {}
           console.error(`[sondera] adjudicate timed out after ${this.timeoutMs}ms`)
           resolve({ decision: "allow" })
         }, this.timeoutMs)
