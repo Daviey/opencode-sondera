@@ -59,17 +59,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # When this issue closes, upstream has merged --deterministic-only.
-          # Switch ci.yml to clone from upstream and remove this step.
-          # See https://github.com/sondera-ai/sondera-coding-agent-hooks/issues/8
-          STATE=$(gh api repos/sondera-ai/sondera-coding-agent-hooks/issues/8 --jq '.state')
+          # When this PR merges, upstream has --deterministic-only.
+          # Switch ci.yml to clone from upstream main and remove this step.
+          # See https://github.com/sondera-ai/sondera-coding-agent-hooks/pull/9
+          STATE=$(gh api repos/sondera-ai/sondera-coding-agent-hooks/pulls/9 --jq '.state')
           if [ "$STATE" = "closed" ]; then
-            echo "::error::Upstream issue #8 is closed. Switch ci.yml to clone from upstream and remove this fork check."
+            echo "::error::Upstream PR #9 is closed. Switch ci.yml to clone from upstream and remove this fork check."
             exit 1
           fi
-          echo "Upstream issue #8 is $STATE, continuing with fork."
-      - name: Clone harness repo (fork)
-        run: git clone --depth 1 -b feat/deterministic-only https://github.com/Daviey/sondera-coding-agent-hooks.git /tmp/harness
+          echo "Upstream PR #9 is $STATE, continuing with PR branch."
+      - name: Clone harness repo (upstream PR branch)
+        run: |
+          git clone --depth 1 -b feat/deterministic-only https://github.com/Daviey/sondera-coding-agent-hooks.git /tmp/harness
       - name: Build harness server
         run: cargo build --bin sondera-harness-server
         working-directory: /tmp/harness
