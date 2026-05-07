@@ -174,6 +174,7 @@ nix build .#sondera-opencode-adapter
 | `SONDERA_ALLOW_PATTERNS` | (none) | Comma-separated regex patterns to bypass adjudication |
 | `SONDERA_AUDIT_LOG` | (none) | Path to JSONL file for adjudication audit trail |
 | `SONDERA_ADJUDICATE_TIMEOUT_MS` | `5000` | Milliseconds before adjudication is aborted (fail-open) |
+| `SONDERA_DETERMINISTIC_ONLY` | `true` | Set to `false` to enable LLM classifiers (requires Ollama) |
 
 ### Strict Mode
 
@@ -202,7 +203,8 @@ Create `.opencode/sondera.json` or `sondera.json` in your project root:
   "policiesPath": "/path/to/sondera-coding-agent-hooks/policies",
   "allowPatterns": ["git status", "git diff", "git log"],
   "auditLogPath": "/tmp/sondera-audit.jsonl",
-  "adjudicateTimeoutMs": 5000
+  "adjudicateTimeoutMs": 5000,
+  "deterministicOnly": true
 }
 ```
 

@@ -78,6 +78,9 @@ function spawnHarnessServer(): boolean {
   if (config!.policiesPath) {
     args.push("--policy-path", config!.policiesPath)
   }
+  if (config!.deterministicOnly) {
+    args.push("--deterministic-only")
+  }
 
   try {
     harnessProc = Bun.spawn({
