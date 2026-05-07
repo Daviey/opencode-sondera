@@ -159,8 +159,15 @@ async fn do_adjudicate(client: &HarnessClient, req: AdapterRequest) -> Result<Ad
     })
 }
 
+async fn connect_harness() -> Result<HarnessClient> {
+    if let Ok(socket) = std::env::var("SONDERA_SOCKET") {
+        return HarnessClient::connect(std::path::Path::new(&socket)).await;
+    }
+    HarnessClient::connect_default().await
+}
+
 async fn adjudicate(req: AdapterRequest) -> Result<AdapterResponse> {
-    let client = HarnessClient::connect_default().await?;
+    let client = connect_harness().await?;
     do_adjudicate(&client, req).await
 }
 
@@ -205,7 +212,7 @@ async fn stream_mode() -> Result<()> {
         };
 
         if harness_client.is_none() {
-            match HarnessClient::connect_default().await {
+            match connect_harness().await {
                 Ok(c) => harness_client = Some(c),
                 Err(e) => {
                     let resp = AdapterResponse {
@@ -244,7 +251,7 @@ async fn stream_mode() -> Result<()> {
 }
 
 async fn health_check() -> Result<()> {
-    let client = HarnessClient::connect_default().await?;
+    let client = connect_harness().await?;
     let healthy = client.health().await?;
     if healthy {
         println!("{}", serde_json::json!({"status": "ok"}));
