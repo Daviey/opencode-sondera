@@ -274,6 +274,158 @@ describe("SonderaPlugin", () => {
     await plugin["tool.execute.before"](input, output)
     await plugin["tool.execute.after"](input, output)
   })
+
+  it("auto-spawns harness with --deterministic-only when configured", async () => {
+    const spawnCalls: string[][] = []
+    let callIdx = 0
+    Bun.spawn = mock((opts: any) => {
+      const cmd = opts?.cmd || []
+      spawnCalls.push(cmd)
+      callIdx++
+      if (callIdx === 1) {
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: makeStdout(""),
+          stderr: makeStdout(""),
+          exited: Promise.resolve(1),
+        }
+      }
+      if (callIdx === 2) {
+        return {
+          pid: 12345,
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: makeStdout(""),
+          stderr: makeStdout(""),
+          exited: new Promise(() => {}),
+        }
+      }
+      if (callIdx === 3) {
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: makeStdout(""),
+          stderr: makeStdout(""),
+          exited: Promise.resolve(0),
+        }
+      }
+      const output = createMockOutputStream()
+      return {
+        stdin: {
+          write: mock((data: string) => {
+            output.push(JSON.stringify({ decision: "allow" }) + "\n")
+          }),
+          end: mock(() => {}),
+        },
+        stdout: output.stream,
+        stderr: makeStdout(""),
+        exitCode: null,
+        exited: new Promise(() => {}),
+        killed: false,
+        kill: mock(() => {}),
+      }
+    }) as any
+
+    process.env.SONDERA_HARNESS_PATH = "/usr/local/bin/harness"
+    process.env.SONDERA_POLICIES_PATH = "/tmp/policies"
+
+    const mod = await import("./index")
+    mod._reset()
+    const plugin = await mod.SonderaPlugin({
+      directory: "/tmp",
+      project: { path: "/tmp" },
+      client: {} as any,
+      $: {} as any,
+      worktree: "/tmp",
+    })
+
+    await plugin["tool.execute.before"](
+      { tool: "bash", sessionId: "s1" },
+      { args: { command: "ls" } },
+    )
+
+    const harnessSpawn = spawnCalls[1]
+    expect(harnessSpawn).toContain("--deterministic-only")
+    expect(harnessSpawn).toContain("--policy-path")
+    expect(harnessSpawn).toContain("/tmp/policies")
+
+    delete process.env.SONDERA_HARNESS_PATH
+    delete process.env.SONDERA_POLICIES_PATH
+  })
+
+  it("does not pass --deterministic-only when SONDERA_DETERMINISTIC_ONLY=false", async () => {
+    const spawnCalls: string[][] = []
+    let callIdx = 0
+    Bun.spawn = mock((opts: any) => {
+      const cmd = opts?.cmd || []
+      spawnCalls.push(cmd)
+      callIdx++
+      if (callIdx === 1) {
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: makeStdout(""),
+          stderr: makeStdout(""),
+          exited: Promise.resolve(1),
+        }
+      }
+      if (callIdx === 2) {
+        return {
+          pid: 12345,
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: makeStdout(""),
+          stderr: makeStdout(""),
+          exited: new Promise(() => {}),
+        }
+      }
+      if (callIdx === 3) {
+        return {
+          stdin: { write: mock(() => {}), end: mock(() => {}) },
+          stdout: makeStdout(""),
+          stderr: makeStdout(""),
+          exited: Promise.resolve(0),
+        }
+      }
+      const output = createMockOutputStream()
+      return {
+        stdin: {
+          write: mock((data: string) => {
+            output.push(JSON.stringify({ decision: "allow" }) + "\n")
+          }),
+          end: mock(() => {}),
+        },
+        stdout: output.stream,
+        stderr: makeStdout(""),
+        exitCode: null,
+        exited: new Promise(() => {}),
+        killed: false,
+        kill: mock(() => {}),
+      }
+    }) as any
+
+    process.env.SONDERA_HARNESS_PATH = "/usr/local/bin/harness"
+    process.env.SONDERA_POLICIES_PATH = "/tmp/policies"
+    process.env.SONDERA_DETERMINISTIC_ONLY = "false"
+
+    const mod = await import("./index")
+    mod._reset()
+    const plugin = await mod.SonderaPlugin({
+      directory: "/tmp",
+      project: { path: "/tmp" },
+      client: {} as any,
+      $: {} as any,
+      worktree: "/tmp",
+    })
+
+    await plugin["tool.execute.before"](
+      { tool: "bash", sessionId: "s1" },
+      { args: { command: "ls" } },
+    )
+
+    const harnessSpawn = spawnCalls[1]
+    expect(harnessSpawn).not.toContain("--deterministic-only")
+
+    delete process.env.SONDERA_HARNESS_PATH
+    delete process.env.SONDERA_POLICIES_PATH
+    delete process.env.SONDERA_DETERMINISTIC_ONLY
+  })
 })
 
 function createMockOutputStream() {

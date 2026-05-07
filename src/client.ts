@@ -37,9 +37,11 @@ export class HarnessClient {
   private useStream: boolean | null = null
   private chain: Promise<void> = Promise.resolve()
   private forceOneshot: boolean
+  private timeoutMs: number
 
-  constructor(binaryPath?: string, forceOneshot = false) {
+  constructor(binaryPath?: string, forceOneshot = false, timeoutMs = 5000) {
     this.forceOneshot = forceOneshot
+    this.timeoutMs = timeoutMs
     const envPath = process.env.SONDERA_ADAPTER_PATH
     if (envPath) {
       this.binaryPath = envPath
@@ -76,9 +78,19 @@ export class HarnessClient {
       await this.ensureStreamProcess()
       const stdin = this.proc!.stdin as unknown as { write: (d: string) => void }
       stdin.write(JSON.stringify(event) + "\n")
-      const line = await this.lineReader!.readLine()
-      if (line === null) throw new Error("stream closed")
-      const result = JSON.parse(line) as AdjudicationResponse
+
+      const lineResult = await Promise.race([
+        this.lineReader!.readLine(),
+        new Promise<string | null>((resolve) =>
+          setTimeout(() => {
+            console.error(`[sondera] stream adjudicate timed out after ${this.timeoutMs}ms`)
+            resolve(null)
+          }, this.timeoutMs)
+        ),
+      ])
+
+      if (lineResult === null) throw new Error("stream closed or timed out")
+      const result = JSON.parse(lineResult) as AdjudicationResponse
       this.useStream = true
       return result
     } catch (err) {
@@ -139,21 +151,31 @@ export class HarnessClient {
     proc.stdin.write(JSON.stringify(event))
     proc.stdin.end()
 
-    const exitCode = await proc.exited
+    const result = await Promise.race([
+      proc.exited.then(async (exitCode) => {
+        if (exitCode !== 0) {
+          const stderr = await new Response(proc.stderr).text()
+          console.error(`[sondera] adapter error (exit ${exitCode}): ${stderr.trim()}`)
+          return { decision: "allow" } as AdjudicationResponse
+        }
+        const stdout = await new Response(proc.stdout).text()
+        try {
+          return JSON.parse(stdout.trim()) as AdjudicationResponse
+        } catch {
+          console.error(`[sondera] invalid adapter response: ${stdout.trim()}`)
+          return { decision: "allow" } as AdjudicationResponse
+        }
+      }),
+      new Promise<{ decision: "allow" }>((resolve) =>
+        setTimeout(() => {
+          try { if (!(proc as any).killed) (proc as any).kill() } catch {}
+          console.error(`[sondera] adjudicate timed out after ${this.timeoutMs}ms`)
+          resolve({ decision: "allow" })
+        }, this.timeoutMs)
+      ),
+    ])
 
-    if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text()
-      console.error(`[sondera] adapter error (exit ${exitCode}): ${stderr.trim()}`)
-      return { decision: "allow" }
-    }
-
-    const stdout = await new Response(proc.stdout).text()
-    try {
-      return JSON.parse(stdout.trim()) as AdjudicationResponse
-    } catch {
-      console.error(`[sondera] invalid adapter response: ${stdout.trim()}`)
-      return { decision: "allow" }
-    }
+    return result as AdjudicationResponse
   }
 
   async health(): Promise<boolean> {

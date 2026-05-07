@@ -78,7 +78,24 @@ describe("loadConfig", () => {
     expect(config.allowPatterns).toEqual([])
   })
 
-  it("defaults strictMode to false", () => {
+  it("defaults deterministicOnly to true", () => {
+    const config = loadConfig("/tmp")
+    expect(config.deterministicOnly).toBe(true)
+  })
+
+  it("disables deterministicOnly via SONDERA_DETERMINISTIC_ONLY=false", () => {
+    process.env.SONDERA_DETERMINISTIC_ONLY = "false"
+    const config = loadConfig("/tmp")
+    expect(config.deterministicOnly).toBe(false)
+  })
+
+  it("enables deterministicOnly via SONDERA_DETERMINISTIC_ONLY=1", () => {
+    process.env.SONDERA_DETERMINISTIC_ONLY = "1"
+    const config = loadConfig("/tmp")
+    expect(config.deterministicOnly).toBe(true)
+  })
+
+  it("loads strictMode to false", () => {
     const config = loadConfig("/tmp")
     expect(config.strictMode).toBe(false)
   })

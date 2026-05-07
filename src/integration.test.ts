@@ -98,7 +98,7 @@ describe("integration: adapter + harness", () => {
     const socketDir = SOCKET_PATH.substring(0, SOCKET_PATH.lastIndexOf("/"))
     mkdirSync(socketDir, { recursive: true })
 
-    harnessProc = Bun.spawn([HARNESS_BIN, "--policy-path", POLICY_PATH, "--socket", SOCKET_PATH], {
+    harnessProc = Bun.spawn([HARNESS_BIN, "--deterministic-only", "--policy-path", POLICY_PATH, "--socket", SOCKET_PATH], {
       env: { ...process.env, RUST_LOG: "info" },
       stderr: "pipe",
       stdout: "pipe",
@@ -114,7 +114,7 @@ describe("integration: adapter + harness", () => {
     })
     cedarDenyWorks = probe.decision === "deny" && !probe.reason
     if (!cedarDenyWorks) {
-      console.warn("[integration] Cedar classify deny not working (Ollama required?), skipping classify deny tests. Probe response:", JSON.stringify(probe))
+      console.warn("[integration] Cedar deny not working, skipping deny tests. Probe response:", JSON.stringify(probe))
     }
     }, 30000)
 
@@ -162,7 +162,7 @@ describe("integration: adapter + harness", () => {
     expect(ids).toContain("forbid-sondera-test-deny")
   })
 
-  test("rm -rf / is denied (requires Ollama classification)", async () => {
+  test("rm -rf / is denied by Cedar policy", async () => {
     if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "bash", action: "ShellCommand",
@@ -176,7 +176,7 @@ describe("integration: adapter + harness", () => {
     expect(ids).toContain("forbid-rm-rf")
   })
 
-  test("rm -rf root triggers forbid-rm-root (requires Ollama)", async () => {
+  test("rm -rf root triggers forbid-rm-root", async () => {
     if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "bash", action: "ShellCommand",
@@ -190,7 +190,7 @@ describe("integration: adapter + harness", () => {
     expect(ids).toContain("forbid-rm-root")
   })
 
-  test("git force push is denied (requires Ollama)", async () => {
+  test("git force push is denied by Cedar policy", async () => {
     if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "bash", action: "ShellCommand",
@@ -204,7 +204,7 @@ describe("integration: adapter + harness", () => {
     expect(ids).toContain("forbid-git-force-push")
   })
 
-  test("private key read is denied (requires Ollama)", async () => {
+  test("private key read is denied by Cedar policy", async () => {
     if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "read", action: "FileRead",

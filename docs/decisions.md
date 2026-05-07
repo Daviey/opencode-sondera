@@ -25,3 +25,4 @@
 | [021](adr/021-adapter-oneshot-error-handling.md) | Adapter Oneshot Error Handling | 2026-05 |
 | [022](adr/022-bundle-export-stripping.md) | Bundle Export Stripping | 2026-05 |
 | [023](adr/023-auto-spawn-harness.md) | Auto-Spawn Harness Server | 2026-05 |
+| [024](adr/024-adjudication-timeout.md) | Adjudication Timeout | 2026-05 |
