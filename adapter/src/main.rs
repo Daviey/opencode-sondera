@@ -375,10 +375,7 @@ mod tests {
 
     #[test]
     fn file_read_extracts_path() {
-        let req = make_req(
-            "FileRead",
-            serde_json::json!({"path": "/etc/hosts"}),
-        );
+        let req = make_req("FileRead", serde_json::json!({"path": "/etc/hosts"}));
         let action = build_action(&req);
         match action {
             Action::FileOperation(fo) => {
@@ -392,10 +389,7 @@ mod tests {
 
     #[test]
     fn file_read_supports_file_path_alias() {
-        let req = make_req(
-            "FileRead",
-            serde_json::json!({"filePath": "/etc/hosts"}),
-        );
+        let req = make_req("FileRead", serde_json::json!({"filePath": "/etc/hosts"}));
         let action = build_action(&req);
         match action {
             Action::FileOperation(fo) => assert_eq!(fo.path, "/etc/hosts"),
@@ -479,10 +473,7 @@ mod tests {
 
     #[test]
     fn unknown_action_falls_back_to_tool_call() {
-        let req = make_req(
-            "CustomAction",
-            serde_json::json!({"foo": "bar"}),
-        );
+        let req = make_req("CustomAction", serde_json::json!({"foo": "bar"}));
         let action = build_action(&req);
         match action {
             Action::ToolCall(tc) => {
