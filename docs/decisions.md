@@ -21,3 +21,5 @@
 | [017](adr/017-bundled-file-not-tracked.md) | Bundled File Not Tracked in Git | 2026-05 |
 | [018](adr/018-codecov-coverage-reporting.md) | Codecov for Coverage Reporting | 2026-05 |
 | [019](adr/019-promise-chain-serialization.md) | Promise Chain Serialization for Concurrent Calls | 2025-03 |
+| [020](adr/020-integration-test-strategy.md) | Integration Test Strategy | 2026-05 |
+| [021](adr/021-adapter-oneshot-error-handling.md) | Adapter Oneshot Error Handling | 2026-05 |
