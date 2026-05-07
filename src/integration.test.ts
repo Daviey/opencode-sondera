@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test"
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, rmSync, writeFileSync, copyFileSync } from "fs"
 import { join } from "path"
 
 const HARNESS_REPO = process.env.SONDERA_HARNESS_REPO || join(import.meta.dir, "../../sondera-coding-agent-hooks")
@@ -17,6 +17,7 @@ const HARNESS_BIN = join(HARNESS_REPO, "target/debug/sondera-harness-server")
 const POLICY_PATH = join(HARNESS_REPO, "policies")
 const SOCKET_PATH = process.env.SONDERA_SOCKET || join(process.env.HOME || "/tmp", ".sondera/sondera-harness.sock")
 const SONDERA_DIR = join(process.env.HOME || "/tmp", ".sondera")
+const TEST_DENY_POLICY = join(import.meta.dir, "policies/test-deny.cedar")
 
 let harnessProc: ReturnType<typeof Bun.spawn> | null = null
 
@@ -74,13 +75,23 @@ function adjudicate(request: object, timeoutMs = 15000): Promise<{ decision: str
   })
 }
 
-describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
-  let cedarWorks = false
+describe("integration: adapter + harness", () => {
+  let cedarDenyWorks = false
 
   beforeAll(async () => {
     if (!existsSync(HARNESS_BIN)) throw new Error("harness binary not found at " + HARNESS_BIN + ". Build from sondera-coding-agent-hooks repo.")
     if (!existsSync(ADAPTER_BIN)) throw new Error("adapter binary not found at " + ADAPTER_BIN)
     if (!existsSync(POLICY_PATH)) throw new Error("policy directory not found at " + POLICY_PATH)
+
+    console.log("[integration] copying test deny policy from", TEST_DENY_POLICY, "to", join(POLICY_PATH, "900-test-deny.cedar"))
+    if (existsSync(TEST_DENY_POLICY)) {
+      const dest = join(POLICY_PATH, "900-test-deny.cedar")
+      copyFileSync(TEST_DENY_POLICY, dest)
+      if (!existsSync(dest)) throw new Error("failed to copy test deny policy to " + dest)
+      console.log("[integration] test deny policy copied, size:", require("fs").statSync(dest).size)
+    } else {
+      throw new Error("test deny policy not found at " + TEST_DENY_POLICY)
+    }
 
     rmSync(SONDERA_DIR, { recursive: true, force: true })
     rmSync(SOCKET_PATH, { force: true })
@@ -101,13 +112,15 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
       args: { command: "rm -rf /" },
       cwd: "/tmp",
     })
-    cedarWorks = probe.decision === "deny" && !probe.reason
-    if (!cedarWorks) {
-      console.warn("[integration] Cedar deny not working (Ollama required?), skipping deny tests. Probe response:", JSON.stringify(probe))
+    cedarDenyWorks = probe.decision === "deny" && !probe.reason
+    if (!cedarDenyWorks) {
+      console.warn("[integration] Cedar classify deny not working (Ollama required?), skipping classify deny tests. Probe response:", JSON.stringify(probe))
     }
-  }, 20000)
+    }, 30000)
 
   afterAll(() => {
+    const testPolicy = join(POLICY_PATH, "900-test-deny.cedar")
+    try { rmSync(testPolicy, { force: true }) } catch {}
     if (harnessProc) {
       harnessProc.kill("SIGKILL")
       harnessProc = null
@@ -135,8 +148,22 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
     expect(result.decision).toBe("allow")
   })
 
-  test("rm -rf / is denied", async () => {
-    if (!cedarWorks) return
+  test("benign test command is denied by test policy (Cedar-only, no Ollama)", async () => {
+    if (!cedarDenyWorks) return
+    const result = await adjudicate({
+      tool: "bash", action: "ShellCommand",
+      trajectory_id: "int-" + Date.now() + "-benign-deny",
+      agent_id: "test",
+      args: { command: "echo sondera-deny-test" },
+      cwd: "/tmp",
+    })
+    expect(result.decision).toBe("deny")
+    const ids = result.annotations.map(a => a.policy_id)
+    expect(ids).toContain("forbid-sondera-test-deny")
+  })
+
+  test("rm -rf / is denied (requires Ollama classification)", async () => {
+    if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "bash", action: "ShellCommand",
       trajectory_id: "int-" + Date.now() + "-deny",
@@ -149,8 +176,8 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
     expect(ids).toContain("forbid-rm-rf")
   })
 
-  test("rm -rf root triggers forbid-rm-root", async () => {
-    if (!cedarWorks) return
+  test("rm -rf root triggers forbid-rm-root (requires Ollama)", async () => {
+    if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "bash", action: "ShellCommand",
       trajectory_id: "int-" + Date.now() + "-root",
@@ -163,8 +190,8 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
     expect(ids).toContain("forbid-rm-root")
   })
 
-  test("git force push is denied", async () => {
-    if (!cedarWorks) return
+  test("git force push is denied (requires Ollama)", async () => {
+    if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "bash", action: "ShellCommand",
       trajectory_id: "int-" + Date.now() + "-forcepush",
@@ -177,8 +204,8 @@ describe("integration: adapter + harness (Cedar + YARA, no Ollama)", () => {
     expect(ids).toContain("forbid-git-force-push")
   })
 
-  test("private key read is denied", async () => {
-    if (!cedarWorks) return
+  test("private key read is denied (requires Ollama)", async () => {
+    if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "read", action: "FileRead",
       trajectory_id: "int-" + Date.now() + "-keyread",
