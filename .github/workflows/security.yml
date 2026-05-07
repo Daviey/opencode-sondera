@@ -70,6 +70,19 @@ jobs:
       - run: cargo install cargo-audit
       - run: cargo audit
 
+  cargo-audit-unignored:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: adapter
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - run: cargo install cargo-audit
+      - name: Audit without ignores
+        run: cargo audit || true
+
   npm-audit:
     runs-on: ubuntu-latest
     continue-on-error: true

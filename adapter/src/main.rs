@@ -293,8 +293,26 @@ async fn main() -> Result<()> {
         Some("adjudicate") | None => {
             let mut input = String::new();
             io::stdin().read_to_string(&mut input)?;
-            let req: AdapterRequest = serde_json::from_str(input.trim())?;
-            let response = adjudicate(req).await?;
+            let req: AdapterRequest = match serde_json::from_str(input.trim()) {
+                Ok(r) => r,
+                Err(e) => {
+                    let resp = AdapterResponse {
+                        decision: "allow".to_string(),
+                        reason: Some(format!("invalid request: {}", e)),
+                        annotations: vec![],
+                    };
+                    println!("{}", serde_json::to_string(&resp)?);
+                    return Ok(());
+                }
+            };
+            let response = match adjudicate(req).await {
+                Ok(r) => r,
+                Err(e) => AdapterResponse {
+                    decision: "allow".to_string(),
+                    reason: Some(format!("adjudication error: {}", e)),
+                    annotations: vec![],
+                },
+            };
             println!("{}", serde_json::to_string(&response)?);
         }
         Some("--help") | Some("-h") => {
