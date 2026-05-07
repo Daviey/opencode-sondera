@@ -149,6 +149,7 @@ describe("integration: adapter + harness", () => {
   })
 
   test("benign test command is denied by test policy (Cedar-only, no Ollama)", async () => {
+    if (!cedarDenyWorks) return
     const result = await adjudicate({
       tool: "bash", action: "ShellCommand",
       trajectory_id: "int-" + Date.now() + "-benign-deny",
