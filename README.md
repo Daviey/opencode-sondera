@@ -91,6 +91,14 @@ You need this if you want to hack on the adapter or your platform has no pre-bui
 ```bash
 cd ..
 git clone https://github.com/sondera-ai/sondera-coding-agent-hooks.git
+```
+
+> **Note:** The `--deterministic-only` flag is required for fast startup without Ollama. Until [upstream issue #8](https://github.com/sondera-ai/sondera-coding-agent-hooks/issues/8) is merged, use the [fork branch](https://github.com/Daviey/sondera-coding-agent-hooks/tree/feat/deterministic-only) instead:
+> ```bash
+> git clone -b feat/deterministic-only https://github.com/Daviey/sondera-coding-agent-hooks.git
+> ```
+
+```bash
 cp -r opencode/sondera/adapter sondera-coding-agent-hooks/apps/opencode
 cd sondera-coding-agent-hooks
 nix-shell ../opencode/sondera/shell.nix --run \
@@ -118,7 +126,7 @@ You can start the harness manually, or let the plugin auto-start it on first too
 
 ```bash
 cd ../sondera-coding-agent-hooks
-./target/debug/sondera-harness-server -v
+./target/debug/sondera-harness-server --deterministic-only -v
 ```
 
 **Auto-start (recommended):**
@@ -250,7 +258,7 @@ The harness server loads Cedar policies from a directory at startup (via `--poli
 
 ```bash
 # Start a per-project harness with custom policies
-sondera-harness-server --policy-path ./my-policies/ --socket /tmp/sondera-project.sock
+sondera-harness-server --deterministic-only --policy-path ./my-policies/ --socket /tmp/sondera-project.sock
 
 # Point the adapter at the custom socket
 SONDERA_SOCKET=/tmp/sondera-project.sock opencode
