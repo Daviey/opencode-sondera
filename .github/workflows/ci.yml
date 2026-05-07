@@ -55,8 +55,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - name: Install system deps
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
-      - name: Clone harness repo
-        run: git clone --depth 1 https://github.com/sondera-ai/sondera-coding-agent-hooks.git /tmp/harness
+      - name: Check upstream --deterministic-only status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # When this issue closes, upstream has merged --deterministic-only.
+          # Switch ci.yml to clone from upstream and remove this step.
+          # See https://github.com/sondera-ai/sondera-coding-agent-hooks/issues/8
+          STATE=$(gh api repos/sondera-ai/sondera-coding-agent-hooks/issues/8 --jq '.state')
+          if [ "$STATE" = "closed" ]; then
+            echo "::error::Upstream issue #8 is closed. Switch ci.yml to clone from upstream and remove this fork check."
+            exit 1
+          fi
+          echo "Upstream issue #8 is $STATE, continuing with fork."
+      - name: Clone harness repo (fork)
+        run: git clone --depth 1 -b feat/deterministic-only https://github.com/Daviey/sondera-coding-agent-hooks.git /tmp/harness
       - name: Build harness server
         run: cargo build --bin sondera-harness-server
         working-directory: /tmp/harness
