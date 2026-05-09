@@ -159,8 +159,15 @@ async fn do_adjudicate(client: &HarnessClient, req: AdapterRequest) -> Result<Ad
     })
 }
 
+async fn connect_harness() -> Result<HarnessClient> {
+    if let Ok(socket) = std::env::var("SONDERA_SOCKET") {
+        return HarnessClient::connect(std::path::Path::new(&socket)).await;
+    }
+    HarnessClient::connect_default().await
+}
+
 async fn adjudicate(req: AdapterRequest) -> Result<AdapterResponse> {
-    let client = HarnessClient::connect_default().await?;
+    let client = connect_harness().await?;
     do_adjudicate(&client, req).await
 }
 
@@ -205,7 +212,7 @@ async fn stream_mode() -> Result<()> {
         };
 
         if harness_client.is_none() {
-            match HarnessClient::connect_default().await {
+            match connect_harness().await {
                 Ok(c) => harness_client = Some(c),
                 Err(e) => {
                     let resp = AdapterResponse {
@@ -220,7 +227,10 @@ async fn stream_mode() -> Result<()> {
             }
         }
 
-        let response = match do_adjudicate(harness_client.as_ref().unwrap(), req).await {
+        let Some(client) = harness_client.as_ref() else {
+            continue;
+        };
+        let response = match do_adjudicate(client, req).await {
             Ok(r) => r,
             Err(e) => {
                 harness_client = None;
@@ -244,7 +254,7 @@ async fn stream_mode() -> Result<()> {
 }
 
 async fn health_check() -> Result<()> {
-    let client = HarnessClient::connect_default().await?;
+    let client = connect_harness().await?;
     let healthy = client.health().await?;
     if healthy {
         println!("{}", serde_json::json!({"status": "ok"}));
@@ -328,4 +338,159 @@ async fn main() -> Result<()> {
 
     let _ = io::stdout().flush();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_req(action: &str, args: serde_json::Value) -> AdapterRequest {
+        AdapterRequest {
+            trajectory_id: "test-traj".to_string(),
+            agent_id: "test-agent".to_string(),
+            tool: "bash".to_string(),
+            action: action.to_string(),
+            args,
+            cwd: Some("/tmp".to_string()),
+            event_type: None,
+        }
+    }
+
+    #[test]
+    fn shell_command_extracts_command() {
+        let req = make_req(
+            "ShellCommand",
+            serde_json::json!({"command": "ls -la /tmp"}),
+        );
+        let action = build_action(&req);
+        match action {
+            Action::ShellCommand(cmd) => {
+                assert_eq!(cmd.command, "ls -la /tmp");
+                assert_eq!(cmd.working_dir.as_deref(), Some("/tmp"));
+                assert!(cmd.call_id.starts_with("call-"));
+            }
+            _ => panic!("expected ShellCommand, got {:?}", action),
+        }
+    }
+
+    #[test]
+    fn file_read_extracts_path() {
+        let req = make_req("FileRead", serde_json::json!({"path": "/etc/hosts"}));
+        let action = build_action(&req);
+        match action {
+            Action::FileOperation(fo) => {
+                assert_eq!(fo.path, "/etc/hosts");
+                assert_eq!(fo.operation, FileOpType::Read);
+                assert!(fo.content.is_none());
+            }
+            _ => panic!("expected FileOperation, got {:?}", action),
+        }
+    }
+
+    #[test]
+    fn file_read_supports_file_path_alias() {
+        let req = make_req("FileRead", serde_json::json!({"filePath": "/etc/hosts"}));
+        let action = build_action(&req);
+        match action {
+            Action::FileOperation(fo) => assert_eq!(fo.path, "/etc/hosts"),
+            _ => panic!("expected FileOperation"),
+        }
+    }
+
+    #[test]
+    fn file_write_extracts_content() {
+        let req = make_req(
+            "FileWrite",
+            serde_json::json!({"path": "/tmp/test.txt", "content": "hello"}),
+        );
+        let action = build_action(&req);
+        match action {
+            Action::FileOperation(fo) => {
+                assert_eq!(fo.operation, FileOpType::Write);
+                assert_eq!(fo.path, "/tmp/test.txt");
+                assert_eq!(fo.content.as_deref(), Some("hello"));
+            }
+            _ => panic!("expected FileOperation"),
+        }
+    }
+
+    #[test]
+    fn file_edit_extracts_old_and_new() {
+        let req = make_req(
+            "FileEdit",
+            serde_json::json!({
+                "path": "/tmp/test.txt",
+                "oldString": "old",
+                "newString": "new"
+            }),
+        );
+        let action = build_action(&req);
+        match action {
+            Action::FileOperation(fo) => {
+                assert_eq!(fo.operation, FileOpType::Edit);
+                assert_eq!(fo.old_content.as_deref(), Some("old"));
+                assert_eq!(fo.content.as_deref(), Some("new"));
+            }
+            _ => panic!("expected FileOperation"),
+        }
+    }
+
+    #[test]
+    fn file_edit_supports_alternate_field_names() {
+        let req = make_req(
+            "FileEdit",
+            serde_json::json!({
+                "filePath": "/tmp/test.txt",
+                "old_content": "old",
+                "new_content": "new"
+            }),
+        );
+        let action = build_action(&req);
+        match action {
+            Action::FileOperation(fo) => {
+                assert_eq!(fo.path, "/tmp/test.txt");
+                assert_eq!(fo.old_content.as_deref(), Some("old"));
+                assert_eq!(fo.content.as_deref(), Some("new"));
+            }
+            _ => panic!("expected FileOperation"),
+        }
+    }
+
+    #[test]
+    fn web_fetch_extracts_url() {
+        let req = make_req(
+            "WebFetch",
+            serde_json::json!({"url": "https://example.com"}),
+        );
+        let action = build_action(&req);
+        match action {
+            Action::WebFetch(wf) => {
+                assert_eq!(wf.url, "https://example.com");
+            }
+            _ => panic!("expected WebFetch"),
+        }
+    }
+
+    #[test]
+    fn unknown_action_falls_back_to_tool_call() {
+        let req = make_req("CustomAction", serde_json::json!({"foo": "bar"}));
+        let action = build_action(&req);
+        match action {
+            Action::ToolCall(tc) => {
+                assert_eq!(tc.tool, "bash");
+                assert_eq!(tc.arguments["foo"], "bar");
+            }
+            _ => panic!("expected ToolCall"),
+        }
+    }
+
+    #[test]
+    fn empty_command_defaults_to_empty_string() {
+        let req = make_req("ShellCommand", serde_json::json!({}));
+        let action = build_action(&req);
+        match action {
+            Action::ShellCommand(cmd) => assert_eq!(cmd.command, ""),
+            _ => panic!("expected ShellCommand"),
+        }
+    }
 }

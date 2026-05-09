@@ -21,7 +21,7 @@ export function _reset() {
   initialized = false
   config = null
   if (harnessProc) {
-    try { if (!(harnessProc as any).killed) (harnessProc as any).kill() } catch {}
+    try { if (!harnessProc.killed) harnessProc.kill() } catch {}
     harnessProc = null
   }
   resetMetrics()
