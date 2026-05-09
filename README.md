@@ -41,31 +41,11 @@ This plugin is the glue between opencode and the harness. It normalises tool cal
 
 ### Quick install (curl)
 
-Download the adapter binary and plugin from the [latest release](https://github.com/Daviey/opencode-sondera/releases/latest):
-
 ```bash
-# Pick the right binary for your platform
-ARCH=$(uname -m)
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-case "$ARCH-$OS" in
-  x86_64-linux)  TARGET=x86_64-unknown-linux-gnu ;;
-  aarch64-linux) TARGET=aarch64-unknown-linux-gnu ;;
-  x86_64-darwin) TARGET=x86_64-apple-darwin ;;
-  arm64-darwin)  TARGET=aarch64-apple-darwin ;;
-  *) echo "unsupported: $ARCH-$OS"; exit 1 ;;
-esac
-
-mkdir -p ~/.local/bin
-curl -L "https://github.com/Daviey/opencode-sondera/releases/latest/download/sondera-opencode-adapter-${TARGET}" \
-  -o ~/.local/bin/sondera-opencode-adapter
-chmod +x ~/.local/bin/sondera-opencode-adapter
-
-mkdir -p ~/.config/opencode/plugins
-curl -L https://github.com/Daviey/opencode-sondera/releases/latest/download/sondera-bundled.ts \
-  -o ~/.config/opencode/plugins/sondera.ts
+curl -fsSL https://github.com/Daviey/opencode-sondera/raw/main/install.sh | bash
 ```
 
-That gives you the adapter in `~/.local/bin/` and the plugin in `~/.config/opencode/plugins/`. opencode auto-loads `.ts` files from the plugins directory.
+This downloads the latest adapter binary and plugin for your platform, validates them, and installs to `~/.local/bin/` and `~/.config/opencode/plugins/`. opencode auto-loads `.ts` files from the plugins directory.
 
 ### npm
 
