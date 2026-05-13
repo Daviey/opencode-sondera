@@ -18,7 +18,7 @@ jobs:
       - run: bun install
       - run: bun test src/index.test.ts src/client.test.ts src/config.test.ts src/metrics.test.ts src/normalize.test.ts --coverage --coverage-reporter=lcov --coverage-reporter=text
       - run: npx tsc --noEmit
-      - uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+      - uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
           fail_ci_if_error: false
 
@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
 
   integration:
     needs: [test, adapter-check]
